@@ -3,9 +3,15 @@
 This is the API documentation of the `tmqmrdfdata` package.
 
 - ![method](https://img.shields.io/badge/method-purple) &nbsp;[tmqmrdfdata.download_tmQM_RDF_knowledge_graph](#-tmqmrdfdatadownload_tmqm_rdf_knowledge_graph): download utility for tmQM-RDF
-- ![class](https://img.shields.io/badge/class-turquoise) &emsp;&nbsp;[tmqmrdfdata.TmqmRDF](): main interface to tmQM-RDF
-- ![module](https://img.shields.io/badge/module-gray) &ensp;[tmqmrdfdata.terminology](): TBox utilities
-- ![module](https://img.shields.io/badge/module-gray) &ensp;[tmqmrdfdata.assertions](): ABox utilities
+- ![class](https://img.shields.io/badge/class-turquoise) &emsp;&nbsp;[tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf): main interface to tmQM-RDF
+- ![module](https://img.shields.io/badge/module-gray) &ensp;[tmqmrdfdata.terminology](#-tmqmrdfdataterminology): TBox utilities
+  - ![class](https://img.shields.io/badge/class-turquoise) [tmqmrdfdata.terminology.TmqmRDFTBoxSubgraph](#-tmqmrdftboxsubgraph): TBox subgraph utility
+- ![module](https://img.shields.io/badge/module-gray) &ensp;[tmqmrdfdata.assertions](#-tmqmrdfdataassertions): ABox utilities
+  - ![class](https://img.shields.io/badge/class-turquoise) [tmqmrdfdata.assertions.TmqmRDFABoxSubgraph](#-tmqmrdfaboxsubgraph): ABox subgraph utility
+  - ![class](https://img.shields.io/badge/class-turquoise) [tmqmrdfdata.assertions.TMC](#-tmc): TMC instances utility
+  - ![class](https://img.shields.io/badge/class-turquoise) [tmqmrdfdata.assertions.Ligand](#-ligand): Ligand species utility
+  - ![class](https://img.shields.io/badge/class-turquoise) [tmqmrdfdata.assertions.Centre](#-centre): Metal Centre species utility
+  - ![class](https://img.shields.io/badge/class-turquoise) [tmqmrdfdata.assertions.Element](#-element): Elements utility
 
 # tmqmrdfdata methods
 
@@ -126,7 +132,7 @@ def as_knowledge_graph()
 ```
 Returns a single [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) RDF graph given by the union of all the exposed subgraphs
 
-# ![module](https://img.shields.io/badge/module-gray) tmqmrdfdata.terminology
+# ![module](https://img.shields.io/badge/module-gray) data.terminology
 
 A module dedicated to processing and referencing the terminology component of tmQM-RDF. It serves a dual purpose: it exposes the namespaces used in tmQM-RDF as [rdflib.Namespace](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.namespace/) objects and provides a class that contains all the namespaces and URIs in the tmQM-RDF TBox as attributes, for accessible and quick referencing.
 
@@ -141,11 +147,11 @@ class TmQMRDFTBoxSubgraph
 ```
 A convenience class designed to summarise the TBox of tmQM-RDF.
 
-Upon initialisation of TmqmRDF, this class is instantiated as an attribute of the main interface. This class crawls across the knowledge graph collecting all the effective namespaces and URIs defined by the TBox. This mechanism allows to avoid hardwiring the RDF/RDFS terms into the code and allows the package to adapt to potential changes implemented in future versions of the knowledge graph.
+Upon initialisation of [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf), this class is instantiated as an attribute of the main interface. This class crawls across the knowledge graph collecting all the effective namespaces and URIs defined by the TBox. This mechanism allows to avoid hardwiring the RDF/RDFS terms into the code and allows the package to adapt to potential changes implemented in future versions of the knowledge graph.
 
 - **Attributes**:
   - `kgraph`: the [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) representation of the TBox.
-  - `tmqmrdf`: the parent TmqmRDF instance.
+  - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
   - For each namespaxe `<pfx>` defined in tmQM-RDF, an attribute `.<pfx>` is defined. The value of the attribute is a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) whose attributes are the suffixes of the URIs within the namespace (those attributes evaluate to the corresponding [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) objects).
 
 #### \_\_init\_\_
@@ -154,7 +160,7 @@ def __init__(tmqmrdf, category)
 ```
 
 - **Parameters**:
-  - `tmqmrdf`: the parent TmqmRDF instance.
+  - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
 
 # ![module](https://img.shields.io/badge/module-gray) tmqmrdfdata.assertions
 A module designed to handle the individual subgraphs of the tmQM-RDF ABox corresponding to TMCs, ligand species, metal centres, and elements. In addition to exposing the standard functionalities provided by [rdlib](https://rdflib.readthedocs.io/en/stable/), the classes defined in this module allow to easily retrieve all the possible properties of these objects using a [networkx](https://networkx.org/en/)-like syntax.
@@ -169,7 +175,7 @@ A base class representing a subgraph of tmQM-RDF's ABox.
 
 - **Attributes**:
   - `kgraph`: the [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) representation of the TBox.
-  - `tmqmrdf`: the parent TmqmRDF instance.
+  - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
   - `code`: the identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
   - `public_code`: alias for `code`.
 
@@ -179,7 +185,7 @@ def __init__(tmqmrdf, category, code)
 ```
 
 - **Parameters**:
-  - `tmqmrdf`: the parent TmqmRDF instance.
+  - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
   - `category`: one of "TMCs", "ligands", "centres", "elements".
   - `code`: the identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
  
@@ -205,7 +211,7 @@ def __init__(tmqmrdf, tmc_name)
 ```
 
 - **Parameters**:
-  - `tmqmrdf`: the parent TmqmRDF instance.
+  - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
   - `tmc_name`: the CSD code of the TMC.
 
 #### atoms
