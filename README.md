@@ -113,3 +113,8 @@ TMC-related subgraph posses a unique method, that allows to visualise their moel
 kceypt.view()
 ```
 ![kceypt tmc](kceypt.png)
+
+## Contact
+For any questions related to the package, contact Luca Cibinel: [https://orcid.org/0009-0009-1274-8327](https://orcid.org/0009-0009-1274-8327).
+
+For questions regarding tmQM-RDF, please check the [tmQM-RDF contact info](https://www.integreat.no/research/rdf/tmqm-rdf-dataset/).
