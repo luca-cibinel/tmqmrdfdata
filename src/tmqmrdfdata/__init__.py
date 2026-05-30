@@ -1,10 +1,33 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-This script defines a class that converts the RDF representation of TMCs employed in tmQM-RDF
-into an networkx-encoded version of one of the three representations defined below (run this script for a visual representation).
+tmqmrdfdata is an rdflib-based Python package designed to support and facilitate the interaction with 
 
-For simplicity, it relies on the tmQMg dataset and it expands it using information from tmQMg-L (linked via tmQM-RDF).
+tmQM-RDF: a Knowledge Graph Representing Transition Metal Complexes.
+
+Author: Luca Cibinel, ORCID: 0009-0009-1274-8327
+
+---
+
+MIT License
+
+Copyright (c) 2026 Luca Cibinel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 """
 
 import terminology
@@ -12,7 +35,6 @@ import assertions
 
 import multiprocessing
 import urllib.request
-import numpy as np
 import collections
 import tempfile
 import zipfile
@@ -21,10 +43,14 @@ import shutil
 import json
 import os
 
-import warnings
-np.warnings = warnings
-
 def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest"):
+    """
+    Downloads the tmQM-RDF knowledge graph from its [GitHub repository](https://github.com/luca-cibinel/tmQM-RDF-archive) using the GitHub REST API.
+
+    - **Parameters**:
+        - `dir`: the directory where the data should be saved. Default: '.'.
+        - `version`: the desired tmQM-RDF version, can be either 'latest' or any other available version number (without leading 'v') as a string. Default: 'latest'.
+    """
     find_release_url = "https://api.github.com/repos/luca-cibinel/tmQM-RDF-archive/releases" + ("/latest" if version == "latest" else "")
     
     print("Sending GET requests to GitHub using GitHub REST API to identify the correct release...")
@@ -76,142 +102,71 @@ def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest"):
 
     print("Download complete!")
 
-class TmQMRDF(collections.UserDict):
+class TmqmRDF(collections.UserDict):
     """
     A user-friendly interface to the tmQM-RDF knowledge graph.
-    Table of contents:
-        1. Accessing tmQM-RDF subgraphs
-            1.1 Merging subgraphs
-        2. Subgraph attributes
-        3. Import settings
 
-    1. Accessing tmQM-RDF subgraphs
-    ---
     This class is a dictionary-like object that internally stores selected subgraphs of tmQM-RDF.
-    Namely, a subgraph can be accessed via the key (<category>, <code>), where:
-        - category can be either "TMC", "ligand", "centre" or "element"
-        - code is the corresponding code of the desired object (either the CSD code, the tmQMg-L ligand id, or the chemical symbol for both centres and elements)
-    Initially, not all subgraphs are available. The desired subgraphs have to be "exposed" using the self.expose method. For quick access
-    to single TMCs, ligand species or elements, the methods self.tmc, self.ligand or self.element can also be used.
-
-    Each subgraph (the value returned by self[<category>, <code>]) exposes its rdf triples via the .rdf attribute, which is
-    an rdflib.Graph object.
+    Namely, a subgraph can be accessed via the key (\<category\>, \<code\>), where:
+    - category can be either "TMC", "ligand", "centre" or "element";
+    - code is the corresponding code of the desired object (either the CSD code, the tmQMg-L ligand id, or the chemical symbol for both centres and elements).  
     
-        1.1 Merging subgraphs
-        See rdflib.Graph for more details on how to merge subgraphs.
-        The method self.as_knowledge_graph() can be used to merge all the exposed subgraphs into a single graph.
+    Due to the size of tmQM-RDF, not all subgraphs are immediately loaded upon class instantiation. The desired subgraphs have to be fetched using the `.fetch` method. For quick access
+    to single TMCs, ligand species or elements, the methods `.tmc`, `.ligand`, `.centre`, or `.element` can also be used.
 
-    2. Subgraph attributes
-    ---
-    Additional category-specific attributes may be available. Specifically, TMCs expose the following attributes:
-        - atoms: a list of pairs (atom_name, atom_element), where
-            - atom_name is the name of the object representing the atom, intended
-                as the last element on the URI path (e.g. if the URI is https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/XXYYZZ_El1,
-                the name is XXYYZZ_El1)
-            - atom_element is the chemical symbol of the element of the atom, again, extracted as the last element
-                of the URI path of the element object
-        - atomic_bonds: a list of pairs (atom1_name, atom2_name), where atom[n]_name is the name of the atom at the
-            n-th end of the bond (n = 1,2). The atoms are ordered according to the IDs assigned in the
-            tmQMg dataset, with id(atom1) < id(atom2).
-        - ligands: a dictionary of the form {ligand_name: {'class': ligand_id, 'components': [...]}, ...}
-            where:
-                - ligand_name is the name of the ligand object (intended as the last element
-                    on the URI path)
-                - ligand_id is the id of the reference ligand
-                - components is a list of the names of the atoms that compose this instance of the ligand
-        - metal_centre: a dictionary of the form {'class': centre_element, 'components': [centre_atom]}
-            where:
-                - centre_element is the chemical element of the metal centre
-                - centre_atom is the name of the atom representing the centre at the atomic level
-        - ligand_bonds: a dictionary of the form {ligand_id: bonds, }, where ligand_id is the id of the ligand the
-                bond refers to, and bonds is a list of lists (in the tmQMg-L sense) of the binding atoms.
-    
-    3. Import settings
-    ---
-    The actual import behaviour behaviour of the class is governed by the method self.set_import_setting.
-    By default, the following settings are enabled:
-        - path_to_chem_info = None,
-        - pubchem_url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/periodictable/CSV?response_type=save&response_basename=PubChemElements_all",
-        - request_tmc_atoms = True, 
-        - request_tmc_atomic_bonds = True,
-        - request_tmc_ligands = True,
-        - request_tmc_ligand_bonds = True,
-        - auto_expose_tmc_ligands = False
+    Each subgraph (the value returned by `self[<category>, <code>])` is an instance of tmqmrdfdata.assertions.TmqmRDFABoxSubgraph, and exposes its rdf triples via the `.kgraph` attribute, which is
+    an [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) object. Each category has unique attributes and dedicated methods to quickly retrieve properties and/or visualise the corresponding chemical object. See the related documentation.
+
+    - **Attributes**:
+        - `path`: the path to the root of the tmQM-RDF directory.
+        - `tbox`: an instance of `tmqmrdfdata.terminology.TmqmRDFTBoxSubgraph` representing the TBox.
+        - `t`: alias for `tbox`.
     """
 
     def __init__(self, path):
         """
-        Main interface to tmQM-RDF.
+        Initialises the interface.
 
-        - Arguments:
-            - path: the path to the root directory of tmQM-RDF
+        - **Parameters**:
+            - `path`: the path to the root dir of tmQM-RDF, i.e., the `<root>` node in the tree
+        ```bash
+        <root>
+        ├── assertions
+        │   └── ...
+        └── terminology
+            └──  ...
+        ```
         """
         super().__init__()
 
         self.path = path
-        self.import_settings = dict()
-        self.set_import_settings(
-            None, 
-            "https://pubchem.ncbi.nlm.nih.gov/rest/pug/periodictable/CSV?response_type=save&response_basename=PubChemElements_all",
-            True, 
-            True, 
-            True, 
-            True,
-            False, 
-            force = False
-        )
 
-        self.tbox = terminology.TmQMRDFTBoxSubgraph(self)
+        self.tbox = terminology.TmqmRDFTBoxSubgraph(self)
         self.t = self.tbox
 
-    def set_import_settings(
-                self,
-                path_to_chem_info = None,
-                pubchem_url = None,
-                request_tmc_atoms = None, 
-                request_tmc_atomic_bonds = None,
-                request_tmc_ligands = None,
-                request_tmc_ligand_bonds = None,
-                auto_expose_tmc_ligands = None,
-                force = False
-            ):
-        """
-        Sets the import settings. Only settings that are not None are saved. If a setting is already set and force = False,
-        the corresponding argument is always discarded.
-
-        - Arguments:
-            - path_to_chem_info: a string pointing to the .csv version of the pubchem periodic table (if not present and pubchem_url is
-                available, it will be downloaded to this location)
-            - pubchem_url: the url from which the .csv version of the pubchem periodic table should be downloaded
-            - request_tmc_atoms: when importing a TMC, should its composing atoms be extracted in a user-friendly format?
-            - request_tmc_atomic_bonds: when importing a TMC, should it atomic bonds be extracted in a user-friendly format?
-            - request_tmc_ligands: when importing a TMC, should its composing ligands be extracted in a user-friendly format?
-            - request_tmc_ligand_bonds: when importing a TMC, should its ligand-level bonds be extracted in a user-friendly format?
-            - auto_expose_tmc_ligands: when importing a TMC via self.expose, should its composing ligands be exposed as well? If True, it
-                overrides request_tmc_ligands and the import will always behave as if request_tmc_ligands = True.
-            - force: should the old settings be overwritten?
-        """
-        for key, value in locals().items():
-            if key == "force":
-                continue
-
-            if value is not None and (force or key not in self.import_settings):
-                self.import_settings[key] = value
-
     def _read(self, args):
+        """
+        Instantiates an ABox subgraph.
+
+        - Parameters:
+            - args: a tuple of the form (object_code, object_class)
+
+        - Return:
+            - the instantiated class
+        """
         return args[1](self, args[0])
 
-    def expose(self, tmcs = [], ligands = [], centres = [], elements = [], n_cores = 1):
+    def fetch(self, tmcs = [], ligands = [], centres = [], elements = [], auto_fetch_tmc_components = False, n_cores = 1):
         """
-        Extract one or more subgraphs corresponding to TMCs/ligand species/elements and makes them 
-        accessible via self.__getitem__
+        Fetches the requested subgraphs from tmQM-RDF and makes them available for access via dictionary-like syntax.
 
-        - Arguments:
-            - tmcs: iterable containing CSD codes of TMCs to extract
-            - ligands: iterable containing tmQMg-L ids of ligand species to extract
-            - centres: iterable containing the chemical symbols of the metal centres to extract
-            - elements: iterable containing the chemical symbols of elements to extract
-            - n_cores: how many processes should be used to extract the TMCs. Default: 1
+        - **Parameters**:
+            - `tmcs`: the list of CSD codes of the desired TMCs.
+            - `ligands`: the list of the tmQMg-L codes of the desired ligands.
+            - `centres`: the list of chemical symbols of the desired metal centres.
+            - `elements`: the list of chemical symbols of the desired elements.
+            - `auto_fetch_tmc_components`: should the components of all requested TMCs (ligands, metal centres, elements) be automatically fetched? Default: False.
+            - `n_cores`: number of cores to use for import. Default: 1.
         """
 
         categories = [assertions.TMC, assertions.Ligand, assertions.Centre, assertions.Element]
@@ -232,94 +187,84 @@ class TmQMRDF(collections.UserDict):
                 for obj in parse(self._read, parsed_objects):
                     super().__setitem__((Category.name, obj.public_code), obj)
 
-                    if self.import_settings["auto_expose_tmc_ligands"] and Category.name == "TMC":
-                        local_ligands = [lig_info["class"] for lig_info in obj.ligands.values() if lig_info["class"] not in ligands]
-                        ligands += local_ligands
+                    if auto_fetch_tmc_components and Category.name == "TMC":
+                        local_ligands = [
+                            lig_info["symbol"].split("_")[-1] for lig_info in obj._raw_ligs.values()
+                            if lig_info["symbol"].split("_")[-1] not in ligands
+                        ]
+                        ligands += list(set(local_ligands))
 
-    def tmc(self, csd_code):
+                        local_centre = [
+                            mc_info["symbol"].split("_")[-1] for mc_info in obj._raw_mc.values()
+                            if mc_info["symbol"].split("_")[-1] not in centres
+                        ]
+                        centres += local_centre
+
+                        local_elements = [
+                            atom_info[1].split("/")[-1] for atom_info in obj._raw_atoms
+                            if atom_info[1].split("/")[-1] not in elements
+                        ]
+                        elements += list(set(local_elements))
+
+    def tmc(self, csd_code, with_components = False):
         """
-        Wrapper for
-            self.expose(tmcs = [csd_code])
-            
-            return self[("TMC", csd_code)]
+        Wrapper for:
+        - (equivalent code)
+        ```python
+        self.fetch(tmcs = [csd_code], auto_fetch_tmc_components = with_components)
+    
+        return self["TMC", csd_code]
+        ```
         """
-        self.expose(tmcs = [csd_code])
+        self.fetch(tmcs = [csd_code], auto_fetch_tmc_components = with_components)
 
         return self["TMC", csd_code]
 
     def ligand(self, tmqmgl_code):
         """
-        Wrapper for
-            self.expose(ligands = [tmqmgl_code])
+        Wrapper for:
+        - (equivalent code)
+        ```python
+        self.fetch(ligands = [tmqmgl_code])
 
-            return self["ligand", tmqmgl_code]
+        return self["ligand", tmqmgl_code]
+        ```
         """
-        self.expose(ligands = [tmqmgl_code])
+        self.fetch(ligands = [tmqmgl_code])
 
         return self["ligand", tmqmgl_code]
 
-    def centre(self, pubchem_code):
+    def centre(self, symbol):
         """
-        Wrapper for
-            self.expose(centres = [pubchem_code])
-
-            return self["centre", pubchem_code]
+        Wrapper for:
+        - (equivalent code)
+        ```python
+        self.fetch(centres = [symbol])
+    
+        return self["centre", symbol]
+        ```
         """
-        self.expose(centres = [pubchem_code])
+        self.fetch(centres = [symbol])
 
-        return self["centre", pubchem_code]
+        return self["centre", symbol]
 
-    def element(self, pubchem_code):
+    def element(self, symbol):
         """
-        Wrapper for
-            self.expose(tmcs = [csd_code])
-            self[("element", csd_code)]
+        Wrapper for:
+        - (equivalent code)
+        ```python
+        self.fetch(elements = [symbol])
+    
+        return self["element", symbol]
+        ```
         """
-        self.expose(elements = [pubchem_code])
+        self.fetch(elements = [symbol])
 
-        return self["element", pubchem_code]
+        return self["element", symbol]
 
     def as_knowledge_graph(self):
         """
-        Returns a single rdflib.Graph RDF graph given by the union of all the exposed subgraphs
+        Returns a single [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) RDF graph given by the union of all the exposed subgraphs
         """
 
         return sum([g.rdf for g in self.values()], rdflib.Graph())
-
-# %% Main
-if __name__ == "__main__":
-    __spec__ = None
-
-    import sys
-    bin_path = os.path.abspath(os.path.join(sys.executable, ".."))
-    if bin_path not in os.environ["PATH"].split(":"):
-        print(f"[ WARNING: the path {bin_path} could not be found inside os.environ['PATH']. It will be added now. ]")
-        os.environ["PATH"] = f"{bin_path}:{os.environ['PATH']}"
-
-    ROOT_DIR = os.path.abspath(".")
-    while ".prj_root" not in os.listdir(ROOT_DIR):
-        ROOT_DIR = os.path.abspath(os.path.join(ROOT_DIR, ".."))
-    
-    instance = TmQMRDF(os.path.join(ROOT_DIR, "data", "derivative", "tmQM-RDF", "data", "v1.1"))
-    instance.set_import_settings(
-        path_to_chem_info = os.path.join(ROOT_DIR, "data", "raw", "pubChem", "data"),
-        auto_expose_tmc_ligands = False,
-        force = True
-    )
-
-    g = instance.tmc("KCEYPT")
-    lig_class = instance.ligand("ligand956-0")
-
-    tmAp = terminology.tmAp
-    tmBp = terminology.tmBp
-
-    at = g.atoms(data = [tmAp["natural_atomic_charge"]])
-    bnd = g.bonds(data = [tmBp["wiberg_bond_order"], tmBp["nbo_type"]])
-    lbnd = g.lbonds()
-    lig = g.ligands()
-    mc, mcdata = g.centre()
-    tmc, tmcdata = g.complex(data = [terminology.cmTp["element_counts"], terminology.cmTp["dipole_moment"]])
-
-    lclass, ldata = lig_class.species(data = terminology.lgLrp["denticity_hapticity_orders"])
-
-    g.view()

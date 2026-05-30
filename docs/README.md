@@ -156,7 +156,7 @@ Upon initialisation of [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf), this class i
 
 #### \_\_init\_\_
 ```python
-def __init__(tmqmrdf, category)
+def __init__(tmqmrdf)
 ```
 
 - **Parameters**:

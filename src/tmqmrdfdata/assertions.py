@@ -1,8 +1,39 @@
+"""
+A module designed to handle the individual subgraphs of the tmQM-RDF ABox corresponding to TMCs, 
+ligand species, metal centres, and elements. In addition to exposing the standard functionalities 
+provided by [rdlib](https://rdflib.readthedocs.io/en/stable/), the classes defined in this module allow 
+to easily retrieve all the possible properties of these objects using a [networkx](https://networkx.org/en/)-like syntax.
+
+Author: Luca Cibinel, ORCID: 0009-0009-1274-8327
+
+---
+
+MIT License
+
+Copyright (c) 2026 Luca Cibinel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
 from rdflib import container
 from pathlib import Path
 
-import urllib.request as url
-import pandas as pd
 import terminology
 import collections
 import tempfile
@@ -137,10 +168,31 @@ _PubChemCPKColors = {
 }
 
 class _BNCrawler:
-    
+    """
+    A utility class that performs a DFS traversal only along edges whose start and/or end is a blank node.
+
+    It also allows to filter/highlight certain nodes which match the pattern
+        ?x :p :o
+    for pre-specified :p and :o (e.g. :p = rdf:type, :o \in [set of properties]). These nodes will be retained and
+    highlighted as 'attributes' named after :o
+    """
+
     class _BNTraversal:
+        """
+        A utility class that represents the traversal performed by a BNCrawler.
+        This class offers utilities to contract certain branches (rooted in the nodes that
+        matched the given filters) of the traversal into (nested) named tuples
+        """
 
         def __init__(self, crawler, closure, path, filtered_bns, name):
+            """
+            Parameters:
+                - crawler: the BNCrawler
+                - closure: the nodes found by the DFS traversal
+                - path: a dictionary of the form {node: [nodes reached from node]}
+                - filtered_bns: the blank nodes that mathced the given filter
+                - a name for the collapsed branches
+            """
             self.crawler = crawler
             self.closure = closure
             self.path = path
@@ -148,6 +200,18 @@ class _BNCrawler:
             self.name = name
 
         def contract(self, defaults, alt, **attribute_values):
+            """
+            Contract the whole traversal into a named tuple whose attributes correspond to the blank nodes that matched the filter
+            plus the additional attributes.
+            Sortes collisions (i.e., nodes that satisfy the filter with the same :p and :o but have different :reference) by
+            demoting one of the two as 'alt' (alternative)
+
+            - Parameters:
+                - defaults: a list of parameters that the contracted branches should have
+                    regardless of the predicates that apply to the filtered blank nodes
+                - alt: which dataset is the alternative
+                - **attribute_values: the user-provided values of the additional attributes
+            """
             branches = [
                 self.contract_branch(bn, defaults) for bn in self.filtered_bns
             ]
@@ -180,6 +244,15 @@ class _BNCrawler:
             })
 
         def contract_branch(self, bn, defaults = [], counter = 0):
+            """
+            Recursively contract a branch rooted at bn into a named tuple (or a list if predicates of the form _nnn are found,
+            i.e., if the blank node is a container).
+
+            - Parameters:
+                - bn: the root
+                - defaults: a list of default attributes to insert into the tuple regardless of which predicates apply to bn
+                - counter: a counter representing how deep into the nesting we have gone
+            """
             if not isinstance(bn, rdflib.term.BNode):
                 return bn.toPython() if isinstance(bn, rdflib.term.Literal) else bn
 
@@ -210,6 +283,13 @@ class _BNCrawler:
             return _Entry(*args)
 
     def __init__(self, g, where_objof_isa_ = None, category_name = "", attributes = []):
+        """
+        - Parameters:
+            - g: the RDF graph
+            - where_objof_isa_: list of the form [predicate, [list of admissible objects]]
+            - category_name: the name (i.e., type) of entity that the DFS traversal is meant to summarise
+            - attributes: a list of additional attributes that have to be retrieved alongside those specified by where_objof_isa_
+        """
         self.g = g
 
         self.attributes = attributes
@@ -234,6 +314,9 @@ class _BNCrawler:
         self.Category = collections.namedtuple(f"_{category_name}{loc_key}", data_names + attributes)
     
     def dfs_traversal(self, start):
+        """
+        Traverse the graph from start
+        """
         path = {}
         filtered_bns = []
 
@@ -256,10 +339,26 @@ class _BNCrawler:
         
         return self._BNTraversal(self, list(self.g.transitiveClosure(walk_via_bn, start)), path, filtered_bns, start.split("/")[-1].replace("-", "_"))
 
-class TmQMRDFABoxSubgraph:
+class TmqmRDFABoxSubgraph:
+    """
+    A base class representing a subgraph of tmQM-RDF's ABox.
+
+    - **Attributes**:
+        - `kgraph`: the [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) representation of the TBox.
+        - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
+        - `code`: the identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
+        - `public_code`: alias for `code`.
+    """
+
     name = None
 
     def __init__(self, tmqmrdf, category, code):
+        """
+        - **Parameters**:
+            - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
+            - `category`: one of "TMCs", "ligands", "centres", "elements".
+            - `code`: the identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
+        """
         self._rdf_file = Path(os.path.join(tmqmrdf.path, "assertions", category, f"{code}.ttl")).absolute()
         self.kgraph = rdflib.Graph()
         self.kgraph.parse(self._rdf_file)
@@ -269,9 +368,7 @@ class TmQMRDFABoxSubgraph:
 
     def query(self, query_object):
         """
-        Wrapper for self.kgraph.query.
-        
-        See rdflib.query.
+        Wrapper for `self.kgraph.query()`. See [rdflib.Graph.query](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/#rdflib.graph.Graph.query).
         """
         return self.kgraph.query(query_object)
 
@@ -291,10 +388,22 @@ class TmQMRDFABoxSubgraph:
                 attributes = attributes
             )
 
-class TMC(TmQMRDFABoxSubgraph):
+class TMC(TmqmRDFABoxSubgraph):
+    """
+    A class representing the subgraph of tmQM-RDF describing a given TMC instance
+
+    - **Attributes**
+        - `tmc_name`: alias for `self.code`.
+        - `CSD_code`: alias for `self.code`.
+    """
     name = "TMC"
     
     def __init__(self, tmqmrdf, tmc_name):
+        """
+        - **Parameters**:
+            - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
+            - `tmc_name`: the CSD code of the TMC.
+        """
         super().__init__(tmqmrdf, "TMCs", tmc_name)
 
         self.tmc_name = tmc_name
@@ -309,6 +418,24 @@ class TMC(TmQMRDFABoxSubgraph):
         self._raw_tmc = next(self.kgraph.subjects(terminology.cmT["hasMetalCentre"]))
 
     def atoms(self, data = None, alt = "tmQM"):
+        """
+        Retrieve the list of atoms in the molecular graph of the TMC.
+
+        - **Parameters**:
+            - `data`: either None, an [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef),
+               or a list of such. If different from None, the given URIs indicate which properties should be retrieved 
+               alongside with the list of atoms. URIs must belong to the `tmAp` prefix. Default: None.
+            - `alt`: one of "tmQM" or "tmQMg". In case a requested property is specified in both 
+               of these datasets, the one coming from the `alt` dataset will be absorbed into an `alt` attribute of the 
+               [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) representing the property.
+        
+        - **Returns**:
+            - A dictionary where keys are [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) 
+              representing atoms and values are [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) 
+              objects with the following attributes:
+                - `symbol`: the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) of the chemical symbol of the atom;
+                - if properties are requested (via the `data` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) mirroring the set of directed paths starting at the URI of the property object in the RDF graph. As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes. Instances of [rdfs:Container](https://www.w3.org/TR/rdf-schema/#ch_containervocab) are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the [tmQM-RDF documentation](https://github.com/luca-cibinel/tmQM-RDF).
+        """
         bn_crawler = self._get_property_crawler(data, "AtomInstance", ["symbol"])
 
         atoms = {
@@ -323,6 +450,18 @@ class TMC(TmQMRDFABoxSubgraph):
         return atoms    
     
     def bonds(self, data = None, alt = "tmQM"):
+        """
+        Retrieve the list of atomic bonds in the molecular graph of the TMC.
+
+        - **Parameters**:
+            - `data`: either None, an [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef), or a list of such. If different from None, the given URIs indicate which properties should be retrieved alongside with the list of atom bonds. URIs must belong to the `tmBp` prefix. Default: None.
+            - `alt`: one of "tmQM" or "tmQMg". In case a requested property is specified in both of these datasets, the one coming from the `alt` dataset will be absorbed into an `alt` attribute of the [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) representing the property.
+        
+        - **Returns**:
+            - A dictionary where keys are [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) representing bonds and values are [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) objects with the following attributes:
+                - `atoms`: the list of the two [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) representations of the atoms in the bond;
+                - if properties are requested (via the `data` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) mirroring the set of directed paths starting at the URI of the property object in the RDF graph. As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes. Instances of [rdfs:Container](https://www.w3.org/TR/rdf-schema/#ch_containervocab) are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the [tmQM-RDF documentation](https://github.com/luca-cibinel/tmQM-RDF).
+        """
         bn_crawler = self._get_property_crawler(data, "AtomicBondInstance", ["atoms"])
 
         bonds = {
@@ -337,6 +476,15 @@ class TMC(TmQMRDFABoxSubgraph):
         return bonds
 
     def lbonds(self):
+        """
+        Retrieve the list of ligand-metal centre bonds the TMC.
+
+        - **Returns**:
+            - A dictionary where keys are [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) representing ligand-level bonds and values are [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) objects with the following attributes:
+                - `ligand`: the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) of the ligand participating in the bond;
+                - `atoms`: the list of the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) representations of the atoms in the ligand bond;
+                - `bonds`: the list of the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) representations of the atom-metal centre bonds corresponding to the atoms in `atoms`.
+        """
         _LigandBondInstance = collections.namedtuple(f"_LigandBondInstance{abs(hash('hash'))}", ["ligand", "bonds", "atoms"])
 
         lbonds = {
@@ -349,6 +497,15 @@ class TMC(TmQMRDFABoxSubgraph):
         return lbonds
 
     def ligands(self):
+        """
+        Retrieve the list of ligands the TMC.
+
+        - **Returns**:
+            - A dictionary where keys are [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) representing ligands and values are [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) objects with the following attributes:
+                - `symbol`: the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) of the tmQMg-L code of the ligand species;
+                - `atoms`: the list of the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) representations of the atoms in the ligand.
+
+        """
         _LigandInstance = collections.namedtuple(f"_LigandInstance{abs(hash('hash'))}", ["symbol", "atoms"])
 
         ligs = {
@@ -361,6 +518,19 @@ class TMC(TmQMRDFABoxSubgraph):
         return ligs
 
     def centre(self, as_tuple = True):
+        """
+        Retrieve the metal centre of the TMC.
+
+        - **Parameters**:
+            - `as_tuple`: if True, returns the result as a tuple of the form `(metal_centre_uri, metal_centre_data)` instead of a dictionary of the form `{metal_centre_uri: metal_centre_data}` (added for compatibility with the output of the other functions).
+
+        - **Returns**:
+            - A tuple/dictionary as described above where:
+                - `metal_centre_uri`: the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) of the metal centre;
+                - `metal_centre_data`: a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) with the following attributes:
+                - `symbol`: the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) of the metal centre (as a ligand level object);
+                - `atoms`: the (singleton) list of the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) representation of the metal centre atom.
+        """
         _MetalCentreInstance = collections.namedtuple(f"_MetalCentreInstance{abs(hash('hash'))}", ["symbol", "atoms"])
         (mc, mc_data), = self._raw_mc.items()
 
@@ -374,6 +544,20 @@ class TMC(TmQMRDFABoxSubgraph):
             }
     
     def complex(self, data = None, alt = "tmQM", as_tuple = True):
+        """
+        Retrieve the complex-level representation of the TMC.
+
+        - **Parameters**:
+            - `data`: either None, an [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef), or a list of such. If different from None, the given URIs indicate which properties should be retrieved alongside with the TMC. URIs must belong to the `cmTp` prefix. Note: even if a property is marked in tmQM-RDF as a "meta data", it is treated as any other property by this function. Default: None.
+            - `alt`: one of "tmQM" or "tmQMg". In case a requested property is specified in both of these datasets, the one coming from the `alt` dataset will be absorbed into an `alt` attribute of the [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) representing the property.
+            - `as_tuple`: if True, returns the result as a tuple of the form `(complex_uri, complex_data)` instead of a dictionary of the form `{complex_uri: complex_data}` (added for compatibility with the output of the other functions).
+
+        - **Returns**:
+            - A tuple/dictionary as described above where:
+                - `complex_uri`: the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) of the complex-level representation of the TMC;
+                - `complex_data`: a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) with the following attributes:
+                - if properties are requested (via the `data` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) mirroring the set of directed paths starting at the URI of the property object in the RDF graph. As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes. Instances of [rdfs:Container](https://www.w3.org/TR/rdf-schema/#ch_containervocab) are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the [tmQM-RDF documentation](https://github.com/luca-cibinel/tmQM-RDF).
+        """
         bn_crawler = self._get_property_crawler(data, "TransitionMetalComplexInstance")
 
         tmcdata = bn_crawler.dfs_traversal(self._raw_tmc).contract(
@@ -389,16 +573,6 @@ class TMC(TmQMRDFABoxSubgraph):
             }
 
     def _get_raw_atbonds(self):
-        """
-        (Private method)
-        
-        Runs a SPARQL query to extract the chemical bonds within the TMC from the RDF graph.
-        
-        Returns:
-            A list of pairs (atom1_name, atom2_name), where atom[n]_name is the name of the atom at the
-                n-th end of the bond (n = 1,2). The atoms are ordered according to the IDs assigned in the
-                tmQMg dataset, with id(atom1) < id(atom2).
-        """
         
         half_bonds = self.kgraph.subject_objects(terminology.tmS["b"], unique = True)
 
@@ -410,25 +584,6 @@ class TMC(TmQMRDFABoxSubgraph):
         return bonds
     
     def _get_raw_ligand_components(self):
-        """
-        (Private method)
-        
-        Runs a SPARQL query to extract the ligands (and the metal centre) of the TMC from the RDF graph.
-        Notice that the metal centre is structurally represented as a ligand for simplicity.
-        
-        Returns:
-            A pair of two dictionaries:
-                - {ligand_name: {'class': ligand_id, 'components': [...]}, ...}
-                    where:
-                        - ligand_name is the name of the ligand object (intended as the last element
-                          on the URI path)
-                        - ligand_id is the id of the reference ligand
-                        - components is a list of the names of the atoms that compose this instance of the ligand
-                - {'class': centre_element, 'components': [centre_atom]}
-                    where:
-                        - centre_element is the chemical element of the metal centre
-                        - centre_atom is the name of the atom representing the centre at the atomic level
-        """
         
         lig_symbols = self.kgraph.subject_objects(terminology.lgL["isLigand"], unique = True)
 
@@ -451,15 +606,6 @@ class TMC(TmQMRDFABoxSubgraph):
         return ligs, centre
     
     def _get_raw_lbonds(self):
-        """
-        (Private method)
-        
-        Runs a SPARQL query to extract the ligand-level bonds within the TMC from the RDF graph.
-        
-        Returns:
-            A dictionary of the form {ligand_id: bonds, }, where ligand_id is the id of the ligand the
-                bond refers to, and bonds is a list of lists (in the tmQMg-L sense) of the binding atoms.
-        """
         mc = next(iter(self._raw_mc.values()))["atoms"][0]
         half_lbonds = self.kgraph.subject_objects(terminology.lgS["bLl"], unique = True)
         
@@ -478,12 +624,10 @@ class TMC(TmQMRDFABoxSubgraph):
     
     def skeleton(self):
         """
-        This function computes the "skeleton" of a TMC (i.e. the RDF graph obtained
-        from the corresponding tmQM-RDF entry via a depth-first search, rooted at the TMC node, allowed to
-        move only via URIs) as an auxiliary RDF graph.
-        
-        Returns:
-            - An rdflib.Graph object
+        Computes the "skeleton" of a TMC (i.e. the RDF graph obtained from the corresponding tmQM-RDF entry via a depth-first search, rooted at the TMC node, allowed to move only via URIs) as an auxiliary RDF graph.
+
+        - **Returns**:
+            - The [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) of the skeleton.
         """
         
         # Extract TMC node
@@ -510,18 +654,13 @@ class TMC(TmQMRDFABoxSubgraph):
 
     def as_graphviz(self, layout = "neato"):
         """
-        Encodes the TMC as a graph described via the DOT language.
-        In the resulting graph, each ligand (and the metal centre) is represented as a cluster and hence highlighted
-        via a box named after the ligand id, so as to emphasize the structure of the ligand level. The entire graph
-        is a cluster itself, so it is also highlighted by a box, representing the complex level. The atoms are labelled
-        and colored according to their chemcial element, using the information extracted from the PubChem periodic table data
-        downloaded from https://pubchem.ncbi.nlm.nih.gov/periodic-table/#view=list .
-        
-        Parameters:
-            layout: the desired layout engine, one of 'dot' and 'neato'.
-            
-        Returns:
-            A graphiv.Source object in which the TMC has been encoded
+        Converts the RDF subgraph into a [graphviz](https://graphviz.readthedocs.io/en/stable/manual.html) graphical representation.
+
+        - **Parameters**:
+            - `layout`: the desired graphviz layout, one of "dot" or "neato". Default: "neato".
+
+        - **Returns**:
+            - A [graphviz.Source](https://graphviz.readthedocs.io/en/stable/api.html#graphviz.Source) object.
         """
         
         # Prepare individual node/edge attributes decalarations
@@ -702,12 +841,12 @@ class TMC(TmQMRDFABoxSubgraph):
     
     def view(self, format = "png", filename = None, layout = "neato"):
         """
-        Produces an image of the TMC rendered via the graphviz module and visualises it.
+        Produces an image of the TMC rendered via the [graphviz](https://graphviz.readthedocs.io/en/stable/manual.html) module and visualises it.
         
-        Parameters:
-            - format: the desired output format for the resulting graphviz object (pdf, png, svg, ...)
-            - filename: the name of the file (without the extension) to which the output should be saved (optional)
-            - layout: the desired layout engine, one of 'dot' and 'neato'.
+        - **Parameters**:
+            - `format`: the desired output format for the resulting graphviz object (pdf, png, svg, ...).
+            - `filename`: the name of the file (without the extension) to which the output should be saved (optional).
+            - `layout`: the desired layout engine, one of '"dot" and "neato". Default: "neato".
         """
         src = self.as_graphviz(layout)
         src.format = format
@@ -719,12 +858,12 @@ class TMC(TmQMRDFABoxSubgraph):
             
     def render(self, format = "png", filename = None, layout = "neato"):
         """
-        Produces an image of the TMC rendered via the graphviz module
+        Saves an image of the TMC rendered via the [graphviz](https://graphviz.readthedocs.io/en/stable/manual.html) module, without visualising it.
         
-        Parameters:
-            - format: the desired output format for the resulting graphviz object (pdf, png, svg, ...)
-            - filename: the name of the file (without the extension) to which the output should be saved (optional)
-            - layout: the desired layout engine, one of 'dot' and 'neato'.
+        - **Parameters**:
+            - `format`: the desired output format for the resulting graphviz object (pdf, png, svg, ...).
+            - `filename`: the name of the file (without the extension) to which the output should be saved.
+            - `layout`: the desired layout engine, one of '"dot" and "neato". Default: "neato".
         """
         src = self.as_graphviz(layout)
         src.format = format
@@ -734,16 +873,41 @@ class TMC(TmQMRDFABoxSubgraph):
         else:
             src.render(filename, cleanup = True)
 
-class Ligand(TmQMRDFABoxSubgraph):
+class Ligand(TmqmRDFABoxSubgraph):
+    """
+    A class representing the subgraph of tmQM-RDF describing a given ligand species
+
+    - **Attributes**
+        - `tmqmgl_code`: alias for `self.code`.
+    """
     name = "ligand"
     
     def __init__(self, tmqmrdf, tmqmgl_code):
+        """
+        - **Parameters**:
+            - `tmqmrdf`: the parent TmqmRDF instance.
+            - `tmqmgl_code`: the tmQMg-L code of the species.
+        """
         super().__init__(tmqmrdf, "ligands", tmqmgl_code)
 
         self.tmqmgl_code = tmqmgl_code
         self._raw_ligand = next(self.kgraph.subjects(terminology.rdf["type"], terminology.lgLr["LigandClass"]))
 
     def species(self, data = None, alt = None, as_tuple = True):
+        """
+        Retrieve the RDF representation of the ligand species.
+
+        - **Parameters**:
+            - `data`: either None, an [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef), or a list of such. If different from None, the given URIs indicate which properties should be retrieved. URIs must belong to the `lgLrp` prefix. Default: None.
+            - `alt`: ignored. Added for compatibility with the other functions.
+            - `as_tuple`: if True, returns the result as a tuple of the form `(species_uri, species_data)` instead of a dictionary of the form `{species_uri: species_data}` (added for compatibility with the output of the other functions).
+
+        - **Returns**:
+            - A tuple/dictionary as described above where:
+                - `species_uri`: the [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) of the RDF representation of the species;
+                - `species_data`: a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) with the following attributes:
+                - if properties are requested (via the `data` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) mirroring the set of directed paths starting at the URI of the property object in the RDF graph. As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes. Instances of [rdfs:Container](https://www.w3.org/TR/rdf-schema/#ch_containervocab) are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the [tmQM-RDF documentation](https://github.com/luca-cibinel/tmQM-RDF).
+        """
         bn_crawler = self._get_property_crawler(data, "LigandSpecies")
 
         ligdata = bn_crawler.dfs_traversal(self._raw_ligand).contract(
@@ -758,19 +922,39 @@ class Ligand(TmQMRDFABoxSubgraph):
                 self._raw_ligand: ligdata
             }
 
-class Centre(TmQMRDFABoxSubgraph):
+class Centre(TmqmRDFABoxSubgraph):
+    """
+    A class representing the subgraph of tmQM-RDF describing a given metal centre species.
+
+    - **Attributes**
+        - `symbol`: alias for `self.code`.
+    """
     name = "centre"
     
     def __init__(self, tmqmrdf, pubchem_code):
+        """
+        - **Parameters**:
+            - `symbol`: the chemical symbol of the metal centre.  
+        """
         super().__init__(tmqmrdf, "centres", "MetalCentre_" + pubchem_code)
 
         self.pubchem_code = pubchem_code
         self.public_code = pubchem_code
 
-class Element(TmQMRDFABoxSubgraph):
+class Element(TmqmRDFABoxSubgraph):
+    """
+    A class representing the subgraph of tmQM-RDF describing a given element.
+
+    - **Attributes**
+        - `symbol`: alias for `self.code`.
+    """
     name = "element"
     
     def __init__(self, tmqmrdf, pubchem_code):
+        """
+        - **Parameters**:
+            - `symbol`: the chemical symbol of the element.
+        """
         super().__init__(tmqmrdf, "elements", pubchem_code)
 
         self.pubchem_code = pubchem_code

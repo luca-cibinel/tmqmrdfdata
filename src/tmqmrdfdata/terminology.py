@@ -1,3 +1,40 @@
+"""
+A module dedicated to processing and referencing the terminology component of tmQM-RDF. 
+It serves a dual purpose: it exposes the namespaces used in tmQM-RDF as 
+[rdflib.Namespace](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.namespace/) objects and provides 
+a class that contains all the namespaces and URIs in the tmQM-RDF TBox as attributes, for accessible and quick referencing.
+
+- Variables
+  - For each prefix `<pfx>` used in tmQM-RDF, a variable `tmqmrdfdata.terminology.<pfx>` is defined as 
+    an [rdflib.Namespace](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.namespace/) instance.
+
+Author: Luca Cibinel, ORCID: 0009-0009-1274-8327
+
+---
+
+MIT License
+
+Copyright (c) 2026 Luca Cibinel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
 import os
 import rdflib
 import collections
@@ -41,9 +78,30 @@ tmBrp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset
 tmS = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/structure/")
 xmls = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
 
-class TmQMRDFTBoxSubgraph:
+class TmqmRDFTBoxSubgraph:
+    """
+    A convenience class designed to summarise the TBox of tmQM-RDF.
+
+    Upon initialisation of [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf), this class is instantiated as an attribute of the main interface. 
+    This class crawls across the knowledge graph collecting all the effective namespaces and URIs defined by the TBox. 
+    This mechanism allows to avoid hardwiring the RDF/RDFS terms into the code and allows the package to adapt to 
+    potential changes implemented in future versions of the knowledge graph.
+
+    - **Attributes**:
+        - `kgraph`: the [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) representation of the TBox.
+        - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
+        - For each namespaxe `<pfx>` defined in tmQM-RDF, an attribute `.<pfx>` is defined. The value of the attribute 
+          is a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) whose attributes are 
+          the suffixes of the URIs within the namespace (those attributes evaluate to the 
+          corresponding [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) objects).
+
+    """
 
     def __init__(self, tmqmrdf):
+        """    
+        - **Parameters**:
+            - `tmqmrdf`: the parent TmqmRDF instance.
+        """
         self.tmqmrdf = tmqmrdf
 
         self.kgraph = rdflib.Graph()
