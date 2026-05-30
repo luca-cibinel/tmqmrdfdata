@@ -4,7 +4,7 @@ This is the API documentation of the `tmqmrdfdata` package.
 
 - ![method](https://img.shields.io/badge/method-purple) &nbsp;[tmqmrdfdata.download_tmQM_RDF_knowledge_graph](#-tmqmrdfdatadownload_tmqm_rdf_knowledge_graph): download utility for tmQM-RDF
 - ![class](https://img.shields.io/badge/class-turquoise) &emsp;&nbsp;[tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf): main interface to tmQM-RDF
-- ![module](https://img.shields.io/badge/module-gray) &ensp;[tmqmrdfdata.terminology](#-tmqmrdfdataterminology): TBox utilities
+- ![module](https://img.shields.io/badge/module-gray) &ensp;[tmqmrdfdata.terminology](https://github.com/luca-cibinel/tmqmrdfdata/tree/main/docs#-tmqmrdfdataterminology): TBox utilities
   - ![class](https://img.shields.io/badge/class-turquoise) [tmqmrdfdata.terminology.TmqmRDFTBoxSubgraph](#-tmqmrdftboxsubgraph): TBox subgraph utility
 - ![module](https://img.shields.io/badge/module-gray) &ensp;[tmqmrdfdata.assertions](#-tmqmrdfdataassertions): ABox utilities
   - ![class](https://img.shields.io/badge/class-turquoise) [tmqmrdfdata.assertions.TmqmRDFABoxSubgraph](#-tmqmrdfaboxsubgraph): ABox subgraph utility
