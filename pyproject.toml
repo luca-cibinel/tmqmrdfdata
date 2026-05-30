@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tmqmrdfdata"
+version = "1.0.2"
+authors = [
+  { name="Luca Cibinel", email="lcibinel@gmail.com" },
+]
+description = "An rdflib-based interface for tmQM-RDF"
+readme = "README.md"
+requires-python = ">=3.12.7"
+dependencies = [
+    "rdflib>=7.1.4",
+    "graphviz>=0.21"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+keywords = [
+    "Transition metal complexes",
+    "Chemistry",
+    "RDF"
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://www.integreat.no/research/rdf/tmqm-rdf-dataset"
+Source = "https://github.com/luca-cibinel/tmqmrdfdata/tree/main"
+Documentation = "https://github.com/luca-cibinel/tmqmrdfdata/tree/main/docs"

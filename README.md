@@ -112,7 +112,7 @@ TMC-related subgraph posses a unique method, that allows to visualise their moel
 ```python
 kceypt.view()
 ```
-![kceypt tmc](kceypt.png)
+![kceypt tmc](https://github.com/luca-cibinel/tmqmrdfdata/blob/main/kceypt.png)
 
 ## Contact
 For any questions related to the package, contact Luca Cibinel: [https://orcid.org/0009-0009-1274-8327](https://orcid.org/0009-0009-1274-8327).

@@ -30,8 +30,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import terminology
-import assertions
+from . import terminology
+from . import assertions
 
 import multiprocessing
 import urllib.request
@@ -42,6 +42,13 @@ import rdflib
 import shutil
 import json
 import os
+
+__all__ = [
+    "download_tmQM_RDF_knowledge_graph",
+    "TmqmRDF",
+    "terminology",
+    "assertions"
+]
 
 def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest"):
     """

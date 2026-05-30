@@ -32,9 +32,9 @@ SOFTWARE.
 """
 
 from rdflib import container
+from . import terminology
 from pathlib import Path
 
-import terminology
 import collections
 import tempfile
 import graphviz
