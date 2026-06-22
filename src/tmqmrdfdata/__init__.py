@@ -371,4 +371,4 @@ class TmqmRDF(collections.UserDict):
         Returns a single [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) RDF graph given by the union of all the exposed subgraphs
         """
 
-        return sum([g.rdf for g in self.values()], rdflib.Graph())
+        return sum([g.kgraph for g in self.values()], rdflib.Graph())
