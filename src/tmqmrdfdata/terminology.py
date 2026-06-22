@@ -36,47 +36,56 @@ SOFTWARE.
 """
 
 import os
+import sys
 import rdflib
 import collections
 
-cm = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/complex/")
-cmT = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/complex/TMC/")
-cmTp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/TMC/property/")
-ds = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/datasets/")
-dsC = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/datasets/complexes/")
-dsG = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/datasets/graphs/")
-dsL = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/datasets/ligands/")
-lg = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/")
-lgB = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/bond/")
-lgBp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/bond/property/")
-lgBr = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/bond/reference/")
-lgBrp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/bond/reference/property/")
-lgC = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/centre/")
-lgCp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/centre/property/")
-lgCr = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/centre/reference/")
-lgCrp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/centre/reference/property/")
-lgL = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/")
-lgLp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/property/")
-lgLr = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/reference/")
-lgLrm = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/reference/motif/")
-lgLro = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/reference/occurrence/")
-lgLrp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/reference/property/")
-lgS = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/structure/")
-ms = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/misc/")
-nm = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/numerical/")
-rdf = rdflib.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-rdfs = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
-tm = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/")
-tmA = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/")
-tmAp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/property/")
-tmAr = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/reference/")
-tmArp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/reference/property/")
-tmB = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/bond/")
-tmBp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/bond/property/")
-tmBr = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/bond/reference/")
-tmBrp = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/bond/reference/property/")
-tmS = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/structure/")
-xmls = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
+DEFAULT_NAMESPACES = dict()
+DEFAULT_NAMESPACES["cm"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/complex/")
+DEFAULT_NAMESPACES["cmT"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/complex/TMC/")
+DEFAULT_NAMESPACES["cmTp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/TMC/property/")
+DEFAULT_NAMESPACES["ds"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/datasets/")
+DEFAULT_NAMESPACES["dsC"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/datasets/complexes/")
+DEFAULT_NAMESPACES["dsG"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/datasets/graphs/")
+DEFAULT_NAMESPACES["dsL"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/datasets/ligands/")
+DEFAULT_NAMESPACES["lg"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/")
+DEFAULT_NAMESPACES["lgB"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/bond/")
+DEFAULT_NAMESPACES["lgBp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/bond/property/")
+DEFAULT_NAMESPACES["lgBr"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/bond/reference/")
+DEFAULT_NAMESPACES["lgBrp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/bond/reference/property/")
+DEFAULT_NAMESPACES["lgC"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/centre/")
+DEFAULT_NAMESPACES["lgCp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/centre/property/")
+DEFAULT_NAMESPACES["lgCr"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/centre/reference/")
+DEFAULT_NAMESPACES["lgCrp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/centre/reference/property/")
+DEFAULT_NAMESPACES["lgL"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/")
+DEFAULT_NAMESPACES["lgLp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/property/")
+DEFAULT_NAMESPACES["lgLr"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/reference/")
+DEFAULT_NAMESPACES["lgLrm"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/reference/motif/")
+DEFAULT_NAMESPACES["lgLro"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/reference/occurrence/")
+DEFAULT_NAMESPACES["lgLrp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/ligand/reference/property/")
+DEFAULT_NAMESPACES["lgS"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/ligand/structure/")
+DEFAULT_NAMESPACES["ms"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/misc/")
+DEFAULT_NAMESPACES["nm"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/numerical/")
+DEFAULT_NAMESPACES["rdf"] = rdflib.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+DEFAULT_NAMESPACES["rdfs"] = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
+DEFAULT_NAMESPACES["tm"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/")
+DEFAULT_NAMESPACES["tmA"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/")
+DEFAULT_NAMESPACES["tmAp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/property/")
+DEFAULT_NAMESPACES["tmAr"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/reference/")
+DEFAULT_NAMESPACES["tmArp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/atom/reference/property/")
+DEFAULT_NAMESPACES["tmB"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/bond/")
+DEFAULT_NAMESPACES["tmBp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/bond/property/")
+DEFAULT_NAMESPACES["tmBr"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/bond/reference/")
+DEFAULT_NAMESPACES["tmBrp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/bond/reference/property/")
+DEFAULT_NAMESPACES["tmS"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/structure/")
+DEFAULT_NAMESPACES["xmls"] = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
+
+DEFAULT_PREFIXES = dict()
+
+_this = sys.modules[__name__]
+for pfx, ns in DEFAULT_NAMESPACES.items():
+    setattr(_this, pfx, ns)
+    DEFAULT_PREFIXES[ns] = pfx
 
 class TmqmRDFTBoxSubgraph:
     """
@@ -109,10 +118,13 @@ class TmqmRDFTBoxSubgraph:
         # Parse TBox rdf graphs
         for dir, _, files in os.walk(os.path.join(self.tmqmrdf.path, "terminology")):
             for f in files:
-                if not f.endswith(".ttl"):
+                if f.split(".")[-1] not in (list(rdflib.util.SUFFIX_FORMAT_MAP) + ["hdt"]):
                     continue
 
-                self.kgraph.parse(os.path.join(dir, f))
+                self.kgraph += self.tmqmrdf._read_kgraph(os.path.join(dir, f))
+
+        for pfx, ns in DEFAULT_NAMESPACES.items():
+            self.kgraph.bind(pfx, ns, True, True)
 
         # Identify namespaces and related URIs
         ns = {
