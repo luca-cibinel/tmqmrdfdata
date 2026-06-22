@@ -31,8 +31,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from rdflib import container
 from . import terminology
+from . import factory
+
+from rdflib import container
 from pathlib import Path
 
 import collections
@@ -186,7 +188,7 @@ class _BNCrawler:
 
         def __init__(self, crawler, closure, path, filtered_bns, name):
             """
-            Parameters:
+            - Parameters:
                 - crawler: the BNCrawler
                 - closure: the nodes found by the DFS traversal
                 - path: a dictionary of the form {node: [nodes reached from node]}
@@ -339,7 +341,7 @@ class _BNCrawler:
         
         return self._BNTraversal(self, list(self.g.transitiveClosure(walk_via_bn, start)), path, filtered_bns, start.split("/")[-1].replace("-", "_"))
 
-class TmqmRDFABoxSubgraph:
+class TmqmRDFABoxSubgraph(factory.AbstractTmqmRDFABoxSubgraph):
     """
     A base class representing a subgraph of tmQM-RDF's ABox.
 
@@ -359,11 +361,13 @@ class TmqmRDFABoxSubgraph:
             - `category`: one of "TMCs", "ligands", "centres", "elements".
             - `code`: the identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
         """
+        super().__init__(tmqmrdf, code)
         self._rdf_file = Path(os.path.join(tmqmrdf.path, "assertions", category, f"{code}.{tmqmrdf._backend}")).absolute()
-        self.kgraph = tmqmrdf._read_kgraph(self._rdf_file)
-        self.code = code
-        self.public_code = code
-        self.tmqmrdf = tmqmrdf
+        self._kgraph = tmqmrdf._read_kgraph(self._rdf_file)
+
+    @property
+    def kgraph(self):
+        return self._kgraph
 
     def query(self, query_object):
         """

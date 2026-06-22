@@ -215,6 +215,13 @@ class TmqmRDF(collections.UserDict):
 
         self._backend = next(iter(extension_type))
 
+        self._categories = {
+            "tmcs": (assertions.TMC, True, "TMCs"),
+            "ligands": (assertions.Ligand, True, "ligands"),
+            "centres": (assertions.Centre, True, "centres"),
+            "elements": (assertions.Element, True, "elements")
+        }
+
         self.tbox = terminology.TmqmRDFTBoxSubgraph(self)
         self.t = self.tbox
     
@@ -252,27 +259,48 @@ class TmqmRDF(collections.UserDict):
         """
         return args[1](self, args[0])
 
-    def fetch(self, tmcs = [], ligands = [], centres = [], elements = [], auto_fetch_tmc_components = False, n_cores = 1):
+    def fetch(self, tmcs = [], ligands = [], centres = [], elements = [], auto_fetch_tmc_components = False, n_cores = 1, **kwargs):
         """
         Fetches the requested subgraphs from tmQM-RDF and makes them available for access via dictionary-like syntax.
+        For each possible category, objects can be identified via their symbols or via a callable. If the latter is chosen,
+        the callable must accept one arguments (the parsed object) and return a boolean (whether the object is accepted or not).
 
         - **Parameters**:
-            - `tmcs`: the list of CSD codes of the desired TMCs.
+            - `tmcs`: the list of CSD codes of the desired TMCs, or a callable as described above.
             - `ligands`: the list of the tmQMg-L codes of the desired ligands.
             - `centres`: the list of chemical symbols of the desired metal centres.
             - `elements`: the list of chemical symbols of the desired elements.
             - `auto_fetch_tmc_components`: should the components of all requested TMCs (ligands, metal centres, elements) be automatically fetched? Default: False.
             - `n_cores`: number of cores to use for import. Default: 1.
+            - **`kwargs`: for each custom category defined via self.register_category, the list of desired symbols, or a callable as described above.
         """
 
-        categories = [assertions.TMC, assertions.Ligand, assertions.Centre, assertions.Element]
+        objects_symbols = {
+            "tmcs": tmcs,
+            "ligands": ligands,
+            "centres": centres,
+            "elements": elements
+        } | kwargs
 
-        for objects, Category in zip([tmcs, ligands, centres, elements], categories):
+        categories = ["tmcs", "ligands", "centres", "elements"] + list(kwargs.keys())
+
+        for catname in categories:
+            # Process category class and symbols list
+            objects = objects_symbols[catname]
+            Category = self._categories[catname][0]
+
             criterion = None
             if callable(objects):
-                criterion = objects
-                objects = self.index[Category.name + "s"]
+                if not self._categories[catname][1]:
+                    raise ValueError(f"Category {catname!r} cannot be indexed by a callable!")
 
+                criterion = objects
+                objects = self._categories[catname][2]
+
+                if type(objects) is str:
+                    objects = self.index[objects]
+
+            # Start parsing objects (possibly in parallel)
             with multiprocessing.Pool(processes = n_cores) as pool:
                 parsed_objects = [(obj, Category) for obj in objects if (Category.name, obj) not in self.data]
 
@@ -280,7 +308,6 @@ class TmqmRDF(collections.UserDict):
                     continue
 
                 if n_cores > 1:
-                    # pool = multiprocessing.Pool(processes = n_cores)
                     parse = pool.imap_unordered
                 else:
                     parse = map
@@ -290,7 +317,8 @@ class TmqmRDF(collections.UserDict):
                         continue
 
                     super().__setitem__((Category.name, obj.public_code), obj)
-
+                    
+                    # If needed, run auto_fetch_tmc_components routine
                     if auto_fetch_tmc_components and Category.name == "TMC":
                         local_ligands = [
                             lig_info["symbol"].split("_")[-1] for lig_info in obj._raw_ligs.values()
@@ -309,6 +337,82 @@ class TmqmRDF(collections.UserDict):
                             if atom_info[1].split("/")[-1] not in elements
                         ]
                         elements += list(set(local_elements))
+
+    def register_category(self, category_class, argname = None, fetch_via_callable = False, default_symbols = None):
+        """
+        Register a subclass of factory.AbstractTmqmRDFABoxSubgraph as a viable interface accessibe from self.fetch.
+
+        - Parameters:
+            - `category_class`: a subclass of factory.AbstractTmqmRDFABoxSubgraph
+            - `argname`: a name for the argument of self.fetch specifying the symbols to be passed to the class constructor.
+                If None, defaults to `category_class + 's'`. Default: None
+            - `fetch_via_callable`: whether to allow a callable to be passed to self.fetch in place of a list of symbols.
+                If False, `default_symbols` must also be provided. Default: False
+            - `default_symbols`: a list of default symbols to be parsed in case in which a callable is passed to self.fetch.
+                Can also be a string, one of `TMCs`, `ligands`, `elements`, or `centres`, in which case the default list
+                is taken to be the full list of available symbols for that class. Must be provided if `fetch_via_callable` is
+                True. Ignored if `fetch_via_callable` is False. Default: None
+        """
+        if argname is None:
+            argname = category_class.name + "s"
+
+        if argname in self._categories:
+            raise ValueError(f"A category with argname {argname!r} is already registered!")
+
+        if fetch_via_callable and default_symbols is None:
+            raise ValueError("A default list of symbols must be provided to 'default_symbols' when 'fetch_via_callable' is True!")
+
+            try:
+                iter(default_symbols)
+
+                if type(default_symbols) is str:
+                    if default_symbols not in self.index:
+                        raise ValueError(f"If 'default_symbols' is a string, it must be one of {list(self.index.keys())}!")
+
+                    default_symbols = self.index[default_symbols]
+            except TypeError:
+                raise TypeError("'default_symbols' must be either a string or an iterable of symbols!")
+
+        self._categories[argname] = (category_class, fetch_via_callable, default_symbols)
+    
+    def unregister_category(self, argname):
+        """
+        Unregister a previously registered interface class.
+
+        - Parameters:
+            - `argname`: the argname of the class to unregister
+        """
+        if argname in ["tmcs", "elements", "ligands", "centres"]:
+            raise ValueError("Cannot unregister a default category!")
+
+        del self._categories[argname]
+
+    def registered_categories(self, label_defaults = False):
+        """
+        Yields an iterator over descriptive tokens representing the registered categories.
+        Such tokens are tuples of the form
+            (argname, interface class, fetch_via_callable, name/len of default symbols list).
+
+        - Parameters:
+            `label_defaults`: if True, a fifth element is added to each tuple, representing whether that category is
+                a default category. Default: False
+        """
+        for argname, cat_data in self._categories.items():
+            if label_defaults:
+                yield (
+                    argname, 
+                    cat_data[0], 
+                    cat_data[1], 
+                    cat_data[2] if (type(cat_data[2]) is str or cat_data[2] is None) else len(cat_data[2]),
+                    argname in ["tmcs", "elements", "ligands", "centres"]
+                )
+            else:
+                yield (
+                    argname, 
+                    cat_data[0], 
+                    cat_data[1], 
+                    cat_data[2] if (type(cat_data[2]) is str or cat_data[2] is None) else len(cat_data[2])
+                )
 
     def tmc(self, csd_code, with_components = False):
         """
