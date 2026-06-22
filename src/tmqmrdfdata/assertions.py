@@ -359,9 +359,8 @@ class TmqmRDFABoxSubgraph:
             - `category`: one of "TMCs", "ligands", "centres", "elements".
             - `code`: the identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
         """
-        self._rdf_file = Path(os.path.join(tmqmrdf.path, "assertions", category, f"{code}.ttl")).absolute()
-        self.kgraph = rdflib.Graph()
-        self.kgraph.parse(self._rdf_file)
+        self._rdf_file = Path(os.path.join(tmqmrdf.path, "assertions", category, f"{code}.{tmqmrdf._backend}")).absolute()
+        self.kgraph = tmqmrdf._read_kgraph(self._rdf_file)
         self.code = code
         self.public_code = code
         self.tmqmrdf = tmqmrdf
@@ -931,15 +930,15 @@ class Centre(TmqmRDFABoxSubgraph):
     """
     name = "centre"
     
-    def __init__(self, tmqmrdf, pubchem_code):
+    def __init__(self, tmqmrdf, symbol):
         """
         - **Parameters**:
             - `symbol`: the chemical symbol of the metal centre.  
         """
-        super().__init__(tmqmrdf, "centres", "MetalCentre_" + pubchem_code)
+        super().__init__(tmqmrdf, "centres", "MetalCentre_" + symbol)
 
-        self.pubchem_code = pubchem_code
-        self.public_code = pubchem_code
+        self.symbol = symbol
+        self.public_code = symbol
 
 class Element(TmqmRDFABoxSubgraph):
     """
@@ -950,11 +949,11 @@ class Element(TmqmRDFABoxSubgraph):
     """
     name = "element"
     
-    def __init__(self, tmqmrdf, pubchem_code):
+    def __init__(self, tmqmrdf, symbol):
         """
         - **Parameters**:
             - `symbol`: the chemical symbol of the element.
         """
-        super().__init__(tmqmrdf, "elements", pubchem_code)
+        super().__init__(tmqmrdf, "elements", symbol)
 
-        self.pubchem_code = pubchem_code
+        self.symbol = symbol

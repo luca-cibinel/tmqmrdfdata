@@ -33,13 +33,15 @@ SOFTWARE.
 from . import terminology
 from . import assertions
 
+from tqdm import tqdm
+
 import multiprocessing
 import urllib.request
 import collections
+import rdflib_hdt
 import tempfile
 import zipfile
 import rdflib
-import shutil
 import json
 import os
 
@@ -50,13 +52,14 @@ __all__ = [
     "assertions"
 ]
 
-def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest"):
+def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest", hdt_format = False):
     """
     Downloads the tmQM-RDF knowledge graph from its [GitHub repository](https://github.com/luca-cibinel/tmQM-RDF-archive) using the GitHub REST API.
 
     - **Parameters**:
         - `dir`: the directory where the data should be saved. Default: '.'.
         - `version`: the desired tmQM-RDF version, can be either 'latest' or any other available version number (without leading 'v') as a string. Default: 'latest'.
+        - `hdt_format`: download the HDT-equivalent version of the knowledge graph instead of the standard .ttl encoded once. Default: False 
     """
     find_release_url = "https://api.github.com/repos/luca-cibinel/tmQM-RDF-archive/releases" + ("/latest" if version == "latest" else "")
     
@@ -76,20 +79,38 @@ def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest"):
         release = hit[0]
 
     tag, vname, html = release["tag_name"], release["name"], release["html_url"]
-    fetch_url = release["zipball_url"]
+
+    if hdt_format:
+        assets = release["assets"]
+
+        assert len(assets) == 1 and assets[0]["name"].startswith("hdt"), \
+            f"Unable to identify HDT asset (version: {version}) at 'https://github.com/luca-cibinel/tmQM-RDF-archive/'."
+
+        fetch_url = assets[0]["browser_download_url"]
+    else: 
+        fetch_url = release["zipball_url"]
 
     print("")
+    print("Format requested:", ".hdt" if hdt_format else ".ttl")
     print("Release identified:")
     print("\tName:", vname)
     print("\tTag:", tag)
     print("\tURL:", html)
-    print("\tZipball URL:", fetch_url)
+    print("\tDownload URL:", fetch_url)
     print("")
 
-    print(f"Downloading from Zipball URL to '{dir}' ...")
+    print(f"Downloading from 'Download URL' to '{dir}' ...")
     temp_zipname = tempfile.mktemp(".zip", dir = dir)
+    #with urllib.request.urlopen(fetch_url) as response, open(temp_zipname, "wb") as f:
+    #    shutil.copyfileobj(response, f)
+    chunk_size = 1024*8
     with urllib.request.urlopen(fetch_url) as response, open(temp_zipname, "wb") as f:
-        shutil.copyfileobj(response, f)
+        total_size = int(response.headers.get("Content-Length", 0))
+
+        with tqdm(total = total_size, unit = "B", unit_scale = True, unit_divisor = 1024, desc = "Progress") as pbar:
+            while chunk := response.read(chunk_size):
+                f.write(chunk)
+                pbar.update(len(chunk))
 
     print("Extracting archive...")
     with zipfile.ZipFile(temp_zipname) as zipf:
@@ -100,6 +121,8 @@ def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest"):
     os.remove(temp_zipname)
 
     new_dirname = f"tmQM-RDF-{vname}"
+    if hdt_format:
+        new_dirname = "hdt-" + new_dirname
     if new_dirname not in os.listdir(dir):
         os.rename(os.path.join(dir, root_name), os.path.join(dir, new_dirname))
     else:
@@ -108,6 +131,33 @@ def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest"):
         print("")
 
     print("Download complete!")
+
+class _TmqmRDF_HDTStore(rdflib_hdt.HDTStore):
+    """
+    An internal utility class that extends rdflib_hdt.HDTStore to include the default namespaces
+    defined by tmqmrdfdata.terminology. This allows the correct identification of the namespaces
+    defined in tmQM-RDF when using the 'rdflib_hdt' backend.
+
+    The namespace logic has been derived from that of rdflib.plugins.stores.memory.Memory.
+
+    See rdflib_hdt.HDTStore and rdflib.plugins.stores.memory.
+    """
+
+    def __init__(self, path, mapped = True, indexed = True, safe_mode = True, configuration = None, identifier = None):
+        super(_TmqmRDF_HDTStore, self).__init__(path, mapped, indexed, safe_mode, configuration, identifier)
+
+        self.__prefix = terminology.DEFAULT_PREFIXES
+        self.__namespace = terminology.DEFAULT_NAMESPACES
+
+    def namespace(self, prefix: str):
+        return self.__namespace.get(prefix, None)
+
+    def prefix(self, namespace):
+        return self.__prefix.get(namespace, None)
+
+    def namespaces(self):
+        for prefix, namespace in self.__namespace.items():
+            yield prefix, namespace
 
 class TmqmRDF(collections.UserDict):
     """
@@ -126,6 +176,8 @@ class TmqmRDF(collections.UserDict):
 
     - **Attributes**:
         - `path`: the path to the root of the tmQM-RDF directory.
+        - `index`: a dictionary with keys 'centres', 'elements', 'ligands', and 'TMCs' whse values are the lists of the available entries 
+            for the corresponding assertions.
         - `tbox`: an instance of `tmqmrdfdata.terminology.TmqmRDFTBoxSubgraph` representing the TBox.
         - `t`: alias for `tbox`.
     """
@@ -148,8 +200,45 @@ class TmqmRDF(collections.UserDict):
 
         self.path = path
 
+        self._raw_index = {
+            key: [_tvar for f in os.listdir(os.path.join(self.path, "assertions", key)) if not f.startswith(".") and len(_tvar := f.split(".")) == 2]
+            for key in ["centres", "elements", "ligands", "TMCs"]
+        }
+
+        self.index = {
+            key: [f[0] for f in value]
+            for key, value in self._raw_index.items() 
+        }
+
+        extension_type = set(sum([[f[1] for f in val] for val in self._raw_index.values()], []))
+        assert len(extension_type) == 1, f"Unable to identify dataset format. Found: {extension_type}; expected EXACTLY one of {list(rdflib.util.SUFFIX_FORMAT_MAP) + ["hdt"]}."
+
+        self._backend = next(iter(extension_type))
+
         self.tbox = terminology.TmqmRDFTBoxSubgraph(self)
         self.t = self.tbox
+    
+    def _read_kgraph(self, rdf_file):
+        """
+        Reads a knowledge graph in the form of an rdflib.Graph object using the appropriate backend
+        (either rdflib or rdflib_hdt).
+
+        - Parameters:
+            - `rdf_file`: the (full) path to the rdf file
+
+        - Returns:
+            - an rdflib.Graph instance
+        """
+        extension = self._backend
+        if extension in rdflib.util.SUFFIX_FORMAT_MAP:
+            kgraph = rdflib.Graph()
+            kgraph.parse(rdf_file)
+        elif extension == "hdt":
+            kgraph = rdflib.Graph(store = _TmqmRDF_HDTStore(str(rdf_file)))
+        else:
+            raise RuntimeError(f"Specified file format (.{extension}) not recognised!")
+
+        return kgraph
 
     def _read(self, args):
         """
@@ -179,6 +268,11 @@ class TmqmRDF(collections.UserDict):
         categories = [assertions.TMC, assertions.Ligand, assertions.Centre, assertions.Element]
 
         for objects, Category in zip([tmcs, ligands, centres, elements], categories):
+            criterion = None
+            if callable(objects):
+                criterion = objects
+                objects = self.index[Category.name + "s"]
+
             with multiprocessing.Pool(processes = n_cores) as pool:
                 parsed_objects = [(obj, Category) for obj in objects if (Category.name, obj) not in self.data]
 
@@ -192,6 +286,9 @@ class TmqmRDF(collections.UserDict):
                     parse = map
 
                 for obj in parse(self._read, parsed_objects):
+                    if criterion is not None and not criterion(obj):
+                        continue
+
                     super().__setitem__((Category.name, obj.public_code), obj)
 
                     if auto_fetch_tmc_components and Category.name == "TMC":
