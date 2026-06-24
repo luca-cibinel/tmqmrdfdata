@@ -1,15 +1,16 @@
 """
 A module dedicated to processing and referencing the terminology component of tmQM-RDF. 
 It serves a dual purpose: it exposes the namespaces used in tmQM-RDF as 
-[rdflib.Namespace](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.namespace/) objects and provides 
-a class that contains all the namespaces and URIs in the tmQM-RDF TBox as attributes, for accessible and quick referencing.
+`rdflib.Namespace`_ objects and defines a class that contains all the namespaces and URIs in the tmQM-RDF TBox as attributes, for accessible and quick referencing.
 
-- Variables
-  - For each prefix `<pfx>` used in tmQM-RDF, a variable `tmqmrdfdata.terminology.<pfx>` is defined as 
-    an [rdflib.Namespace](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.namespace/) instance.
+This module exposes the following variables:
+
+- For each prefix `<pfx>` used in tmQM-RDF, a variable of the form`tmqmrdfdata.terminology.<pfx>` is defined as 
+    an `rdflib.Namespace`_ instance.
 
 Author: Luca Cibinel, ORCID: 0009-0009-1274-8327
 
+.. _rdflib.Namespace: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.namespace
 ---
 
 MIT License
@@ -40,7 +41,7 @@ import sys
 import rdflib
 import collections
 
-DEFAULT_NAMESPACES = dict()
+DEFAULT_NAMESPACES = dict() #: A dictionary containing the prefixes defined in tmQM-RDF as keys and the corresponding `rdflib.Namespace`_ objects as values.
 DEFAULT_NAMESPACES["cm"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/complex/")
 DEFAULT_NAMESPACES["cmT"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/complex/TMC/")
 DEFAULT_NAMESPACES["cmTp"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/TMC/property/")
@@ -80,7 +81,7 @@ DEFAULT_NAMESPACES["tmBrp"] = rdflib.Namespace("https://www.integreat.no/researc
 DEFAULT_NAMESPACES["tmS"] = rdflib.Namespace("https://www.integreat.no/research/rdf/tmqm-rdf-dataset/#/atomic/structure/")
 DEFAULT_NAMESPACES["xmls"] = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
 
-DEFAULT_PREFIXES = dict()
+DEFAULT_PREFIXES = dict() #: The inverse of :data:`DEFAULT_NAMESPACES`
 
 _this = sys.modules[__name__]
 for pfx, ns in DEFAULT_NAMESPACES.items():
@@ -91,29 +92,36 @@ class TmqmRDFTBoxSubgraph:
     """
     A convenience class designed to summarise the TBox of tmQM-RDF.
 
-    Upon initialisation of [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf), this class is instantiated as an attribute of the main interface. 
+    Upon initialisation of :class:`tmqmrdfdata.TmqmRDF`, this class is instantiated as an attribute of the main interface. 
     This class crawls across the knowledge graph collecting all the effective namespaces and URIs defined by the TBox. 
     This mechanism allows to avoid hardwiring the RDF/RDFS terms into the code and allows the package to adapt to 
     potential changes implemented in future versions of the knowledge graph.
 
-    - **Attributes**:
-        - `kgraph`: the [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) representation of the TBox.
-        - `tmqmrdf`: the parent [tmqmrdfdata.TmqmRDF](#-tmqmrdfdatatmqmrdf) instance.
-        - For each namespaxe `<pfx>` defined in tmQM-RDF, an attribute `.<pfx>` is defined. The value of the attribute 
-          is a [collections.namedtuple](https://docs.python.org/3/library/collections.html#collections.namedtuple) whose attributes are 
-          the suffixes of the URIs within the namespace (those attributes evaluate to the 
-          corresponding [rdflib.term.URIRef](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef) objects).
+    The class has the following attributes:
+    
+    - :attr:`kgraph`: The `rdflib.Graph`_ representation of the TBox.
+    - :attr:`tmqmrdf`: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
+    - For each namespaxe `<pfx>` defined in tmQM-RDF, an attribute `.<pfx>` is defined. The value of the attribute 
+      is a `collections.namedtuple`_ whose attributes are 
+      the suffixes of the URIs within the namespace (those attributes evaluate to the 
+      corresponding `rdflib.term.URIRef`_ objects) defined in the TBox.
+
+    .. _rdflib.Graph: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/
+    .. _collections.namedtuple: https://docs.python.org/3/library/collections.html#collections.namedtuple
+    .. _rdflib.term.URIRef: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef
 
     """
 
     def __init__(self, tmqmrdf):
         """    
-        - **Parameters**:
-            - `tmqmrdf`: the parent TmqmRDF instance.
+        :param tmqmrdf: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
         """
+
         self.tmqmrdf = tmqmrdf
+        """The parent :class:`tmqmrdfdata.TmqmRDF` instance."""
 
         self.kgraph = rdflib.Graph()
+        """ The `rdflib.Graph`_ representation of the TBox."""
 
         # Parse TBox rdf graphs
         for dir, _, files in os.walk(os.path.join(self.tmqmrdf.path, "terminology")):

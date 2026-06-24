@@ -41,60 +41,68 @@ class AbstractTmqmRDFABoxSubgraph(abc.ABC):
 
     Classes meant to acces the ABox of tmQM-RDF should extend this class.
     Subclasses of this class must posses the following:
-        - an __init__ method accepting *exactly* two arguments: `tmqmrdfd`, an instance of TmqmRDF, and `symbol`, a
-            string representing the specific assertions to be extracted. The symbol will be stored in the attributes `code` and
-            `public_code`. Unless overridden, `code` is alias for `public_code`.
-        - a `kgraph` property, returning the knowledge graph represented by the instance of the class.
-        - a `name` class attribute, declaring the code-level name of the type of knowledge accessed by this class.
-    The retrieved knowledge graph can be accessed from the tmqmrdf object via the key (`name`, `public_code`).
+        
+    - an __init__ method accepting *exactly* two arguments: ``tmqmrdf``, an instance of :class:`tmqmrdfdata.TmqmRDF`, and ``symbol``, a string representing the specific assertions to be extracted. The symbol will be stored in the attributes `code` and `public_code`. Unless overridden, `code` is alias for `public_code`.
+    - a `kgraph` property, returning the knowledge graph represented by the instance of the class.
+    - a `name` class attribute, declaring the code-level name of the type of knowledge accessed by this class.
+
+    The retrieved knowledge graph can be accessed from the tmqmrdf object via the key ``(name, public_code)``.
     """
 
     def __init__(self, tmqmrdf, symbol):
-        self.tmqmrdf = tmqmrdf
-        self.code = symbol
-        self.public_code = symbol
+        """
+        :param tmqmrdf: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
+        :param symbol: The identifying symbol. *Note: it doesn't have to be a file name, the specific logic behind the retrieval of an appropriate knowledge graph is entirely customisable.*
+        """
+
+        self.tmqmrdf = tmqmrdf #: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
+
+        self.code = symbol #: The identifying symbol.
+        self.public_code = symbol #: Alias for :attr:`code`
 
     @property
     @abc.abstractmethod
     def kgraph(self):
+        """
+        The `rdflib.Graph`_ representation of the ABox.
+
+        .. _rdflib.Graph: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/
+        """
         pass
 
     @property
     @abc.abstractmethod
     def name(self):
+        """
+        The code-level name of the type of knowledge graph represented by this class.
+        """
         pass
 
-def read_kgraph_file(tmqmrdf, rpath, symbol):
+def read_kgraph_file(tmqmrdf, rpath, fname):
     """
     Reads a knowledge graph from the file specified by the
     path relative to the root of the current tmQM-RDF instance. The graph
-    is read using the appropriate backend registered within tmqmrdf.
+    is read using the appropriate backend.
 
-    - Parameters:
-        - `tmqmrdf`: the instance of TmqmRDF representing the copy of tmQM-RDF
-            from which the file should be read
-        - `rpath`: the path of the folder containing the file, relative to the tmQM-RDF root
-        - `symbol`: the name, without extension, of the file containing the knowledge graph
+    :param tmqmrdf: The instance of :class:`tmqmrdfdata.TmqmRDF` representing the copy of tmQM-RDF from which the file should be read.
+    :param rpath: The path of the folder containing the file, relative to the tmQM-RDF root.
+    :param fname: the name, without extension, of the file containing the knowledge graph.
     
-    - Returns:
-        - an rdflib.Graph object
+    :return: an `rdflib.Graph`_ object
     """
-    fpath = Path(os.path.join(tmqmrdf.path, rpath, f"{symbol}.{tmqmrdf._backend}")).absolute()
+    fpath = Path(os.path.join(tmqmrdf.path, rpath, f"{fname}.{tmqmrdf._backend}")).absolute()
 
     return tmqmrdf._read_kgraph(fpath)
 
 def simple_tmqmrdf_abox_interface(name, kgraph_factory):
     """
-    A convenience factory for a subclass of factory.AbstractTmqmRDFABoxSubgraph with a customised knowledge graph
+    A convenience factory for a subclass of :class:`AbstractTmqmRDFABoxSubgraph` with a customised knowledge graph
     retrieval system but no additional methods.
 
-    - Parameters:
-        - `name`: the code-level name of the type of knowledge accessed by this class.
-        - `kgraph_factory`: a callable accepting two arguments; i.e., `tmqmrdfd`, an instance of TmqmRDF, and `symbol`, a
-            string representing the specific assertions to be extracted
+    :param name: the code-level name of the type of knowledge accessed by this class, as described in :class:`AbstractTmqmRDFABoxSubgraph`.
+    :param kgraph_factory`: a callable accepting two arguments; i.e., ``tmqmrdf``, an instance of :class:`tmqmrdfdata.TmqmRDF`, and ``symbol``, a string representing the specific assertions to be extracted.
 
-    - Returns:
-        - A subclass of factory.AbstractTmqmRDFABoxSubgraph
+    :return: A subclass of :class:`AbstractTmqmRDFABoxSubgraph`.
     """
     class SimpleTmqmRDFABoxSubgraph(AbstractTmqmRDFABoxSubgraph):
         name = name

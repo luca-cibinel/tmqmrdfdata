@@ -49,17 +49,21 @@ __all__ = [
     "download_tmQM_RDF_knowledge_graph",
     "TmqmRDF",
     "terminology",
-    "assertions"
+    "assertions",
+    "factory"
 ]
 
 def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest", hdt_format = False):
     """
-    Downloads the tmQM-RDF knowledge graph from its [GitHub repository](https://github.com/luca-cibinel/tmQM-RDF-archive) using the GitHub REST API.
+    Downloads the tmQM-RDF knowledge graph from its `GitHub repository`_ using the `GitHub REST API`_.
 
-    - **Parameters**:
-        - `dir`: the directory where the data should be saved. Default: '.'.
-        - `version`: the desired tmQM-RDF version, can be either 'latest' or any other available version number (without leading 'v') as a string. Default: 'latest'.
-        - `hdt_format`: download the HDT-equivalent version of the knowledge graph instead of the standard .ttl encoded once. Default: False 
+    .. _GitHub repository: https://github.com/luca-cibinel/tmQM-RDF-archive
+
+    .. _GitHub REST API: https://docs.github.com/en/rest?apiVersion=2026-03-10
+
+    :param dir: The directory where the data should be saved. Default: '.'.
+    :param version: The desired tmQM-RDF version, can be either 'latest' or any other available version number (without leading 'v') as a string. Default: 'latest'.
+    :param hdt_format: Download the HDT-equivalent version of the knowledge graph instead of the standard .ttl encoded once. Default: False.
     """
     find_release_url = "https://api.github.com/repos/luca-cibinel/tmQM-RDF-archive/releases" + ("/latest" if version == "latest" else "")
     
@@ -165,40 +169,42 @@ class TmqmRDF(collections.UserDict):
 
     This class is a dictionary-like object that internally stores selected subgraphs of tmQM-RDF.
     Namely, a subgraph can be accessed via the key (\<category\>, \<code\>), where:
+
     - category can be either "TMC", "ligand", "centre" or "element";
     - code is the corresponding code of the desired object (either the CSD code, the tmQMg-L ligand id, or the chemical symbol for both centres and elements).  
     
-    Due to the size of tmQM-RDF, not all subgraphs are immediately loaded upon class instantiation. The desired subgraphs have to be fetched using the `.fetch` method. For quick access
-    to single TMCs, ligand species or elements, the methods `.tmc`, `.ligand`, `.centre`, or `.element` can also be used.
+    Due to the size of tmQM-RDF, not all subgraphs are immediately loaded upon class instantiation. The desired subgraphs have to be fetched using the :meth:`fetch` method. For quick access
+    to single TMCs, ligand species or elements, the methods :meth:`tmc`, :meth:`ligand`, :meth:`centre`, or :meth:`element` can also be used.
 
-    Each subgraph (the value returned by `self[<category>, <code>])` is an instance of tmqmrdfdata.assertions.TmqmRDFABoxSubgraph, and exposes its rdf triples via the `.kgraph` attribute, which is
-    an [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) object. Each category has unique attributes and dedicated methods to quickly retrieve properties and/or visualise the corresponding chemical object. See the related documentation.
+    Each subgraph (the value returned by `self[<category>, <code>]`) is an instance of :class:`assertions.TmqmRDFABoxSubgraph`, and exposes its rdf triples via the :attr:`assertions.TmqmRDFABoxSubgraph.kgraph` attribute, which is
+    an `rdflib.Graph`_ object. Each category has unique attributes and dedicated methods to quickly retrieve properties and/or visualise the corresponding chemical object. See the related documentation.
 
-    - **Attributes**:
-        - `path`: the path to the root of the tmQM-RDF directory.
-        - `index`: a dictionary with keys 'centres', 'elements', 'ligands', and 'TMCs' whse values are the lists of the available entries 
-            for the corresponding assertions.
-        - `tbox`: an instance of `tmqmrdfdata.terminology.TmqmRDFTBoxSubgraph` representing the TBox.
-        - `t`: alias for `tbox`.
+    .. _rdflib.Graph: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/
+
+    The class has the following attributes:
+
+    - :attr:`path` The path to the root of the tmQM-RDF directory.  
+    - :attr:`index` A dictionary with keys 'centres', 'elements', 'ligands', and 'TMCs' whse values are the lists of the available entries for the corresponding assertions.  
+    - :attr:`tbox` An instance of :class:`terminology.TmqmRDFTBoxSubgraph` representing the TBox.  
+    - :attr:`t` Alias for :attr:`tbox`.  
     """
 
     def __init__(self, path):
         """
-        Initialises the interface.
+        :param path: The path to the root dir of tmQM-RDF, i.e., the `<root>` node in the tree
+        
+        .. code-block :: bash
 
-        - **Parameters**:
-            - `path`: the path to the root dir of tmQM-RDF, i.e., the `<root>` node in the tree
-        ```bash
-        <root>
-        ├── assertions
-        │   └── ...
-        └── terminology
-            └──  ...
-        ```
+           <root>
+           ├── assertions
+           │   └── ...
+           └── terminology
+               └──  ...
         """
         super().__init__()
 
         self.path = path
+        """The path to the root of the tmQM-RDF directory."""
 
         self._raw_index = {
             key: [_tvar for f in os.listdir(os.path.join(self.path, "assertions", key)) if not f.startswith(".") and len(_tvar := f.split(".")) == 2]
@@ -209,6 +215,8 @@ class TmqmRDF(collections.UserDict):
             key: [f[0] for f in value]
             for key, value in self._raw_index.items() 
         }
+        """A dictionary with keys 'centres', 'elements', 'ligands', and 'TMCs' whse values are the lists of the available entries 
+           for the corresponding assertions."""
 
         extension_type = set(sum([[f[1] for f in val] for val in self._raw_index.values()], []))
         assert len(extension_type) == 1, f"Unable to identify dataset format. Found: {extension_type}; expected EXACTLY one of {list(rdflib.util.SUFFIX_FORMAT_MAP) + ["hdt"]}."
@@ -223,18 +231,19 @@ class TmqmRDF(collections.UserDict):
         }
 
         self.tbox = terminology.TmqmRDFTBoxSubgraph(self)
+        """An instance of :class:`terminology.TmqmRDFTBoxSubgraph` representing the TBox."""
         self.t = self.tbox
+        """Alias for :attr:`tbox`."""
     
     def _read_kgraph(self, rdf_file):
         """
-        Reads a knowledge graph in the form of an rdflib.Graph object using the appropriate backend
+        Reads a knowledge graph in the form of an `rdflib.Graph`_ object using the appropriate backend
         (either rdflib or rdflib_hdt).
 
-        - Parameters:
-            - `rdf_file`: the (full) path to the rdf file
+        :param rdf_file: The (full) path to the rdf file.
+        :return: An `rdflib.Graph`_ instance
 
-        - Returns:
-            - an rdflib.Graph instance
+        .. _rdflib.Graph: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/
         """
         extension = self._backend
         if extension in rdflib.util.SUFFIX_FORMAT_MAP:
@@ -265,14 +274,13 @@ class TmqmRDF(collections.UserDict):
         For each possible category, objects can be identified via their symbols or via a callable. If the latter is chosen,
         the callable must accept one arguments (the parsed object) and return a boolean (whether the object is accepted or not).
 
-        - **Parameters**:
-            - `tmcs`: the list of CSD codes of the desired TMCs, or a callable as described above.
-            - `ligands`: the list of the tmQMg-L codes of the desired ligands.
-            - `centres`: the list of chemical symbols of the desired metal centres.
-            - `elements`: the list of chemical symbols of the desired elements.
-            - `auto_fetch_tmc_components`: should the components of all requested TMCs (ligands, metal centres, elements) be automatically fetched? Default: False.
-            - `n_cores`: number of cores to use for import. Default: 1.
-            - **`kwargs`: for each custom category defined via self.register_category, the list of desired symbols, or a callable as described above.
+        :param tmcs: The list of CSD codes of the desired TMCs, or a callable as described above.
+        :param ligands: The list of the tmQMg-L codes of the desired ligands.
+        :param centres: The list of chemical symbols of the desired metal centres.
+        :param elements: The list of chemical symbols of the desired elements.
+        :param auto_fetch_tmc_components: Should the components of all requested TMCs (ligands, metal centres, elements) be automatically fetched? Default: False.
+        :param n_cores: Number of cores to use for import. Default: 1.
+        :param kwargs: For each custom category defined via self.register_category, the list of desired symbols, or a callable as described above.
         """
 
         objects_symbols = {
@@ -340,18 +348,12 @@ class TmqmRDF(collections.UserDict):
 
     def register_category(self, category_class, argname = None, fetch_via_callable = False, default_symbols = None):
         """
-        Register a subclass of factory.AbstractTmqmRDFABoxSubgraph as a viable interface accessibe from self.fetch.
+        Register a subclass of :class:`factory.AbstractTmqmRDFABoxSubgraph` as a viable interface accessibe from :meth:`fetch`.
 
-        - Parameters:
-            - `category_class`: a subclass of factory.AbstractTmqmRDFABoxSubgraph
-            - `argname`: a name for the argument of self.fetch specifying the symbols to be passed to the class constructor.
-                If None, defaults to `category_class + 's'`. Default: None
-            - `fetch_via_callable`: whether to allow a callable to be passed to self.fetch in place of a list of symbols.
-                If False, `default_symbols` must also be provided. Default: False
-            - `default_symbols`: a list of default symbols to be parsed in case in which a callable is passed to self.fetch.
-                Can also be a string, one of `TMCs`, `ligands`, `elements`, or `centres`, in which case the default list
-                is taken to be the full list of available symbols for that class. Must be provided if `fetch_via_callable` is
-                True. Ignored if `fetch_via_callable` is False. Default: None
+        :param category_class: A subclass of :class:`factory.AbstractTmqmRDFABoxSubgraph`.
+        :param argname: A name for the argument of :meth:`fetch` specifying the symbols to be passed to the class constructor. If None, defaults to ``category_class + 's'``. Default: None.
+        :param fetch_via_callable: Whether to allow a callable to be passed to :meth:`fetch` in place of a list of symbols. If False, ``default_symbols`` must also be provided. Default: False.
+        :param default_symbols: A list of default symbols to be parsed in case in which a callable is passed to :meth:`fetch`. Can also be a string, one of ``TMCs``, ``ligands``, ``elements``, or ``centres``, in which case the default list is taken to be the full list of available symbols for that class. Must be provided if ``fetch_via_callable`` is True. Ignored if ``fetch_via_callable`` is False. Default: None.
         """
         if argname is None:
             argname = category_class.name + "s"
@@ -379,8 +381,7 @@ class TmqmRDF(collections.UserDict):
         """
         Unregister a previously registered interface class.
 
-        - Parameters:
-            - `argname`: the argname of the class to unregister
+        :param argname: The argname of the class to unregister.
         """
         if argname in ["tmcs", "elements", "ligands", "centres"]:
             raise ValueError("Cannot unregister a default category!")
@@ -389,13 +390,11 @@ class TmqmRDF(collections.UserDict):
 
     def registered_categories(self, label_defaults = False):
         """
-        Yields an iterator over descriptive tokens representing the registered categories.
-        Such tokens are tuples of the form
+        Yields an iterator over descriptive tokens representing the registered categories. Such tokens are tuples of the form::
+
             (argname, interface class, fetch_via_callable, name/len of default symbols list).
 
-        - Parameters:
-            `label_defaults`: if True, a fifth element is added to each tuple, representing whether that category is
-                a default category. Default: False
+        :param label_defaults: if True, a fifth element is added to each tuple, representing whether that category is a default category. Default: False
         """
         for argname, cat_data in self._categories.items():
             if label_defaults:
@@ -416,13 +415,13 @@ class TmqmRDF(collections.UserDict):
 
     def tmc(self, csd_code, with_components = False):
         """
-        Wrapper for:
-        - (equivalent code)
-        ```python
-        self.fetch(tmcs = [csd_code], auto_fetch_tmc_components = with_components)
+        Wrapper for the equivalent code:
+
+        .. code-block :: python
+           
+           self.fetch(tmcs = [csd_code], auto_fetch_tmc_components = with_components)
     
-        return self["TMC", csd_code]
-        ```
+           return self["TMC", csd_code]
         """
         self.fetch(tmcs = [csd_code], auto_fetch_tmc_components = with_components)
 
@@ -430,13 +429,13 @@ class TmqmRDF(collections.UserDict):
 
     def ligand(self, tmqmgl_code):
         """
-        Wrapper for:
-        - (equivalent code)
-        ```python
-        self.fetch(ligands = [tmqmgl_code])
+        Wrapper for the equivalent code:
 
-        return self["ligand", tmqmgl_code]
-        ```
+        .. code-block :: python
+           
+           self.fetch(ligands = [tmqmgl_code])
+
+           return self["ligand", tmqmgl_code]
         """
         self.fetch(ligands = [tmqmgl_code])
 
@@ -444,13 +443,13 @@ class TmqmRDF(collections.UserDict):
 
     def centre(self, symbol):
         """
-        Wrapper for:
-        - (equivalent code)
-        ```python
-        self.fetch(centres = [symbol])
+        Wrapper for the equivalent code:
+
+        .. code-block :: python
+           
+           self.fetch(centres = [symbol])
     
-        return self["centre", symbol]
-        ```
+           return self["centre", symbol]
         """
         self.fetch(centres = [symbol])
 
@@ -458,13 +457,13 @@ class TmqmRDF(collections.UserDict):
 
     def element(self, symbol):
         """
-        Wrapper for:
-        - (equivalent code)
-        ```python
-        self.fetch(elements = [symbol])
+        Wrapper for the equivalent code:
+
+        .. code-block :: python
+           
+           self.fetch(elements = [symbol])
     
-        return self["element", symbol]
-        ```
+           return self["element", symbol]
         """
         self.fetch(elements = [symbol])
 
@@ -472,7 +471,9 @@ class TmqmRDF(collections.UserDict):
 
     def as_knowledge_graph(self):
         """
-        Returns a single [rdflib.Graph](https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/) RDF graph given by the union of all the exposed subgraphs
+        Returns a single `rdflib.Graph`_ RDF graph given by the union of all the fetched subgraphs.
+
+        .. _`rdflib.Graph`: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/
         """
 
         return sum([g.kgraph for g in self.values()], rdflib.Graph())
