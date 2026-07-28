@@ -275,9 +275,9 @@ class TmqmRDF(collections.UserDict):
         the callable must accept one arguments (the parsed object) and return a boolean (whether the object is accepted or not).
 
         :param tmcs: The list of CSD codes of the desired TMCs, or a callable as described above.
-        :param ligands: The list of the tmQMg-L codes of the desired ligands.
-        :param centres: The list of chemical symbols of the desired metal centres.
-        :param elements: The list of chemical symbols of the desired elements.
+        :param ligands: The list of the tmQMg-L codes of the desired ligands, or a callable as described above.
+        :param centres: The list of chemical symbols of the desired metal centres, or a callable as described above.
+        :param elements: The list of chemical symbols of the desired elements, or a callable as described above.
         :param auto_fetch_tmc_components: Should the components of all requested TMCs (ligands, metal centres, elements) be automatically fetched? Default: False.
         :param n_cores: Number of cores to use for import. Default: 1.
         :param kwargs: For each custom category defined via self.register_category, the list of desired symbols, or a callable as described above.
@@ -352,7 +352,7 @@ class TmqmRDF(collections.UserDict):
 
         :param category_class: A subclass of :class:`factory.AbstractTmqmRDFABoxSubgraph`.
         :param argname: A name for the argument of :meth:`fetch` specifying the symbols to be passed to the class constructor. If None, defaults to ``category_class + 's'``. Default: None.
-        :param fetch_via_callable: Whether to allow a callable to be passed to :meth:`fetch` in place of a list of symbols. If False, ``default_symbols`` must also be provided. Default: False.
+        :param fetch_via_callable: Whether to allow a callable to be passed to :meth:`fetch` in place of a list of symbols. If True, ``default_symbols`` must also be provided. Default: False.
         :param default_symbols: A list of default symbols to be parsed in case in which a callable is passed to :meth:`fetch`. Can also be a string, one of ``TMCs``, ``ligands``, ``elements``, or ``centres``, in which case the default list is taken to be the full list of available symbols for that class. Must be provided if ``fetch_via_callable`` is True. Ignored if ``fetch_via_callable`` is False. Default: None.
         """
         if argname is None:
