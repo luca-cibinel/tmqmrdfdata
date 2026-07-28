@@ -53,21 +53,94 @@ __all__ = [
     "factory"
 ]
 
-def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest", hdt_format = False):
+# %% Download utils ====
+def _download_zip(fetch_url, dir, new_dirname = None):
+    """
+    Utility function to download a zip file from a given URL, unzip it, and then cleanup.
+
+    :param fetch_url: The target URL.
+    :param dir: The directory where the file should be downloaded to.
+    :param new_dirname: None, or the new name that should be assigned to the root directory containing the unzipped files, if any. The function checks for name collisions.
+
+    :return: The name of the root directory
+    """
+
+    print(f"Downloading from 'Download URL' to '{dir}' ...")
+    temp_zipname = tempfile.mktemp(".zip", dir = dir)
+    
+    chunk_size = 1024*8
+    with urllib.request.urlopen(fetch_url) as response, open(temp_zipname, "wb") as f:
+        total_size = int(response.headers.get("Content-Length", 0))
+
+        with tqdm(total = total_size, unit = "B", unit_scale = True, unit_divisor = 1024, desc = "Progress") as pbar:
+            while chunk := response.read(chunk_size):
+                f.write(chunk)
+                pbar.update(len(chunk))
+
+    print("Extracting archive...")
+    with zipfile.ZipFile(temp_zipname) as zipf:
+        zipf.extractall(dir)
+        root_name = zipf.infolist()[0].filename.split(os.sep)[0]
+    
+    print("Cleanup...")
+    os.remove(temp_zipname)
+
+    if new_dirname is not None:
+
+        if new_dirname not in os.listdir(dir):
+            os.rename(os.path.join(dir, root_name), os.path.join(dir, new_dirname))
+        else:
+            print("\n-- Unable to rename root directory due to naming conflict --")
+            print(f"-- The downloaded data can be found in {os.path.join(dir, root_name)}")
+            print()
+
+            new_dirname = root_name
+
+    return new_dirname
+
+def _download_hdt_indices(index_urls, dataset_root_dir):
+    print("Downloading HDT index files...")
+    
+    for fname, url in index_urls:
+        print(f"\nCurrent Download URL: {url}")
+
+        # index naming convention:
+        #     hdt-index-tmQM-RDF-v[version]__[path to folder separated by '_']_._[notes].zip
+        target_path = fname.replace(".zip", "").split("__")[1].split("_._")[0]
+        target_path = target_path.split("_")
+        target_path = os.path.join(dataset_root_dir, *target_path)
+
+        _download_zip(url, target_path, None)
+
+    print()
+    print("Validating HDT index files...")
+
+    walk = list(os.walk(dataset_root_dir))
+    for dir, _, files in tqdm(walk):
+        for f in tqdm(files, leave = False):
+            if f.endswith(".hdt"):
+                assert f + ".index.v1-1" in files, f"Error! In dir {dir}, file {f} has no index!"
+
+def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest", hdt_format = False, hdt_index = True):
     """
     Downloads the tmQM-RDF knowledge graph from its `GitHub repository`_ using the `GitHub REST API`_.
+    The flag _hdt\_format_ allows to download the `HDT`_ version of the dataset instead of the regular Turtle encoded one
+    (recommended for faster performance).
 
     .. _GitHub repository: https://github.com/luca-cibinel/tmQM-RDF-archive
 
     .. _GitHub REST API: https://docs.github.com/en/rest?apiVersion=2026-03-10
 
+    .. _HDT: https://www.rdfhdt.org/what-is-hdt/
+
     :param dir: The directory where the data should be saved. Default: '.'.
     :param version: The desired tmQM-RDF version, can be either 'latest' or any other available version number (without leading 'v') as a string. Default: 'latest'.
     :param hdt_format: Download the HDT-equivalent version of the knowledge graph instead of the standard .ttl encoded once. Default: False.
+    :param hdt_index: If True, download the precomputed HDT index files (if HDT has been requested). Default: True.
     """
     find_release_url = "https://api.github.com/repos/luca-cibinel/tmQM-RDF-archive/releases" + ("/latest" if version == "latest" else "")
     
-    print("Sending GET requests to GitHub using GitHub REST API to identify the correct release...")
+    print("Sending GET request to GitHub using GitHub REST API to identify the correct release...")
     with urllib.request.urlopen(find_release_url) as response:
         response = response.read().decode("utf-8")
     
@@ -84,55 +157,40 @@ def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest", hdt_format 
 
     tag, vname, html = release["tag_name"], release["name"], release["html_url"]
 
+    fetch_url = None
+    index_urls = []
     if hdt_format:
         assets = release["assets"]
 
-        assert len(assets) == 1 and assets[0]["name"].startswith("hdt"), \
-            f"Unable to identify HDT asset (version: {version}) at 'https://github.com/luca-cibinel/tmQM-RDF-archive/'."
-
-        fetch_url = assets[0]["browser_download_url"]
+        for asset in assets:
+            if asset["name"].startswith("hdt-index"):
+                index_urls += [(asset["name"], asset["browser_download_url"])]
+            elif asset["name"].startswith("hdt"):
+                fetch_url = asset["browser_download_url"]
     else: 
         fetch_url = release["zipball_url"]
 
-    print("")
+    assert fetch_url is not None, f"Unable to locate download link for release {vname}"
+
+    print()
     print("Format requested:", ".hdt" if hdt_format else ".ttl")
     print("Release identified:")
     print("\tName:", vname)
     print("\tTag:", tag)
     print("\tURL:", html)
     print("\tDownload URL:", fetch_url)
-    print("")
+    print()
 
-    print(f"Downloading from 'Download URL' to '{dir}' ...")
-    temp_zipname = tempfile.mktemp(".zip", dir = dir)
-    #with urllib.request.urlopen(fetch_url) as response, open(temp_zipname, "wb") as f:
-    #    shutil.copyfileobj(response, f)
-    chunk_size = 1024*8
-    with urllib.request.urlopen(fetch_url) as response, open(temp_zipname, "wb") as f:
-        total_size = int(response.headers.get("Content-Length", 0))
-
-        with tqdm(total = total_size, unit = "B", unit_scale = True, unit_divisor = 1024, desc = "Progress") as pbar:
-            while chunk := response.read(chunk_size):
-                f.write(chunk)
-                pbar.update(len(chunk))
-
-    print("Extracting archive...")
-    with zipfile.ZipFile(temp_zipname) as zipf:
-        zipf.extractall(dir)
-        root_name = zipf.infolist()[0].filename.split(os.sep)[0]
-
-    print("Cleanup...")
-    os.remove(temp_zipname)
-
+    # Download dataset
     new_dirname = f"tmQM-RDF-{vname}"
     if hdt_format:
         new_dirname = "hdt-" + new_dirname
-    if new_dirname not in os.listdir(dir):
-        os.rename(os.path.join(dir, root_name), os.path.join(dir, new_dirname))
-    else:
-        print("\n-- Unable to rename root directory due to naming conflict --")
-        print(f"-- The downloaded data can be found in {os.path.join(dir, root_name)}")
-        print("")
+
+    dataset_root_dir = _download_zip(fetch_url, dir, new_dirname)
+
+    # Download HDT indices
+    if hdt_format and hdt_index:
+        _download_hdt_indices(index_urls, os.path.join(dir, dataset_root_dir))
 
     print("Download complete!")
 
