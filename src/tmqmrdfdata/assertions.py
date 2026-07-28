@@ -262,11 +262,10 @@ class _BNCrawler:
                 return bn.toPython() if isinstance(bn, rdflib.term.Literal) else bn
 
             fields = list(set([p.replace("#", "/").split("/")[-1] for p, _ in self.path[bn]] + defaults)) + ["alt"]
-            
-            if any(re.match(".*\\_\\d+$", f) for f in fields):
-                cont = container.Container(self.crawler.g, bn)
+            list_like_objects = [o for p, o in self.path[bn] if re.match(".*\\_\\d+$", p)]
 
-                loc_path = [(f"x{i}", x) for i, x in enumerate(cont.items())]
+            if len(list_like_objects) > 0:
+                loc_path = [(f"x{i}", x) for i, x in enumerate(list_like_objects)]
                 fields = list(zip(*loc_path))[0]
 
                 def _Entry(*args):
