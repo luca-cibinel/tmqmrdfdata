@@ -192,6 +192,10 @@ def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest", hdt_format 
     if hdt_format and hdt_index:
         _download_hdt_indices(index_urls, os.path.join(dir, dataset_root_dir))
 
+    # Write link to github repository (for single file visualisation)
+    with open(os.path.join(dir, dataset_root_dir, ".pages"), "w") as f:
+        f.write(f"https://github.com/luca-cibinel/tmQM-RDF-archive/%s/{vname}/")
+
     print("Download complete!")
 
 class _TmqmRDF_HDTStore(rdflib_hdt.HDTStore):
@@ -260,6 +264,9 @@ class TmqmRDF(collections.UserDict):
                └──  ...
         """
         super().__init__()
+
+        with open(os.path.join(path, ".pages"), "r") as f:
+            self._pages = f.read().strip()
 
         self.path = path
         """The path to the root of the tmQM-RDF directory."""
@@ -368,7 +375,7 @@ class TmqmRDF(collections.UserDict):
 
             # Start parsing objects (possibly in parallel)
             with multiprocessing.Pool(processes = n_cores) as pool:
-                parsed_objects = [(obj, Category) for obj in objects if (Category.name, obj) not in self.data]
+                parsed_objects = [(obj, Category) for obj in objects if (Category.category, obj) not in self.data]
 
                 if len(parsed_objects) == 0:
                     continue
@@ -382,10 +389,10 @@ class TmqmRDF(collections.UserDict):
                     if criterion is not None and not criterion(obj):
                         continue
 
-                    super().__setitem__((Category.name, obj.public_code), obj)
+                    super().__setitem__((Category.category, obj.symbol), obj)
                     
                     # If needed, run auto_fetch_tmc_components routine
-                    if auto_fetch_tmc_components and Category.name == "TMC":
+                    if auto_fetch_tmc_components and Category.category == "TMC":
                         local_ligands = [
                             lig_info["symbol"].split("_")[-1] for lig_info in obj._raw_ligs.values()
                             if lig_info["symbol"].split("_")[-1] not in ligands
@@ -414,7 +421,7 @@ class TmqmRDF(collections.UserDict):
         :param default_symbols: A list of default symbols to be parsed in case in which a callable is passed to :meth:`fetch`. Can also be a string, one of ``TMCs``, ``ligands``, ``elements``, or ``centres``, in which case the default list is taken to be the full list of available symbols for that class. Must be provided if ``fetch_via_callable`` is True. Ignored if ``fetch_via_callable`` is False. Default: None.
         """
         if argname is None:
-            argname = category_class.name + "s"
+            argname = category_class.category + "s"
 
         if argname in self._categories:
             raise ValueError(f"A category with argname {argname!r} is already registered!")

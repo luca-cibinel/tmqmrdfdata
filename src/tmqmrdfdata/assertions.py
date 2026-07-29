@@ -345,26 +345,22 @@ class TmqmRDFABoxSubgraph(factory.AbstractTmqmRDFABoxSubgraph):
     """
     A base class representing a subgraph of tmQM-RDF's ABox.
 
-    The class has the following attributes:
-
-    - :attr:`kgraph`: The `rdflib.Graph`_ representation of the ABox.
-    - :attr:`tmqmrdf`: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
-    - :attr:`code`: The identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
-    - :attr:`public_code`: Alias for :attr:`code`.
-
     .. _rdflib.Graph: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/
     """
 
-    name = None #: The code-level name of the type of knowledge graph represented by this class. Used by :class:`tmqmrdfdata.TmqmRDF` to determine how the graph can be accessed, as explained in :class:`tmqmrdfdata.factory.AbstractTmqmRDFABoxSubgraph`.
+    category = None #: The code-level name of the type of knowledge graph represented by this class. Used by :class:`tmqmrdfdata.TmqmRDF` to determine how the graph can be accessed, as explained in :class:`tmqmrdfdata.factory.AbstractTmqmRDFABoxSubgraph`.
 
-    def __init__(self, tmqmrdf, category, code):
+    def __init__(self, tmqmrdf, symbol):
         """
         :param tmqmrdf: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
-        :param category: One of "TMCs", "ligands", "centres", "elements".
-        :param code: The identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
+        :param symbol: The identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
         """
-        super().__init__(tmqmrdf, code)
-        self._rdf_file = Path(os.path.join(tmqmrdf.path, "assertions", category, f"{code}.{tmqmrdf._backend}")).absolute()
+        super().__init__(tmqmrdf, symbol)
+        self._rdf_file = Path(
+            os.path.join(
+                tmqmrdf.path, "assertions", type(self).category + "s", f"{type(self).code(symbol)}.{tmqmrdf._backend}"
+            )
+        ).absolute()
         self._kgraph = tmqmrdf._read_kgraph(self._rdf_file)
 
     @property
@@ -399,30 +395,24 @@ class TmqmRDFABoxSubgraph(factory.AbstractTmqmRDFABoxSubgraph):
                 category_name = category_name, 
                 attributes = attributes
             )
+    
+    @staticmethod
+    def code(symbol):
+        return symbol
 
 class TMC(TmqmRDFABoxSubgraph):
     """
     A class representing the subgraph of tmQM-RDF describing a given TMC instance
-
-    The class has the following attributes, in addition to those it inherits:
-        
-    - :attr:`tmc_name`: Alias for :attr:`code`.
-    - :attr:`CSD_code`: Alias for :attr:`code`.
     """
 
-    name = "TMC"
+    category = "TMC"
     
-    def __init__(self, tmqmrdf, tmc_name):
+    def __init__(self, tmqmrdf, symbol):
         """
         :param tmqmrdf: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
-        :param tmc_name: The CSD code of the TMC.
+        :param symbol: The CSD code of the TMC.
         """
-        super().__init__(tmqmrdf, "TMCs", tmc_name)
-
-        self.tmc_name = tmc_name
-        """Alias for :attr:`code`"""
-        self.CSD_code = tmc_name
-        """Alias for :attr:`code`"""
+        super().__init__(tmqmrdf, symbol)
         
         self._raw_atoms = list(self.kgraph.subject_objects(
                             terminology.tmA["isAtom"]
@@ -899,22 +889,15 @@ class TMC(TmqmRDFABoxSubgraph):
 class Ligand(TmqmRDFABoxSubgraph):
     """
     A class representing the subgraph of tmQM-RDF describing a given ligand species
-
-    The class has the following attributes, in addition to those it inherits:
-    
-    - :attr:`tmqmgl_code`: Alias for :attr:`code`.
     """
-    name = "ligand"
+    category = "ligand"
     
-    def __init__(self, tmqmrdf, tmqmgl_code):
+    def __init__(self, tmqmrdf, symbol):
         """
         :param tmqmrdf: -the parent :class:`tmqmrdfdata.TmqmRDF` instance.
-        :param tmqmgl_code: Alias for :attr:`code`.
+        :param symbol: the tmQMg-L comde of the ligand.
         """
-        super().__init__(tmqmrdf, "ligands", tmqmgl_code)
-
-        self.tmqmgl_code = tmqmgl_code
-        """Alias for :attr:`code`."""
+        super().__init__(tmqmrdf, symbol)
 
         self._raw_ligand = next(self.kgraph.subjects(terminology.rdf["type"], terminology.lgLr["LigandClass"]))
 
@@ -950,23 +933,12 @@ class Ligand(TmqmRDFABoxSubgraph):
 class Centre(TmqmRDFABoxSubgraph):
     """
     A class representing the subgraph of tmQM-RDF describing a given metal centre species.
-
-    The class has the following attributes, in addition to those it inherits:
-
-    - :attr:`symbol`: Alias for :attr:`code`.
     """
-    name = "centre"
+    category = "centre"
     
-    def __init__(self, tmqmrdf, symbol):
-        """
-        :param symbol: The chemical symbol of the metal centre.  
-        """
-        super().__init__(tmqmrdf, "centres", "MetalCentre_" + symbol)
-
-        self.symbol = symbol
-        """Alias for :attr:`code`."""
-
-        self.public_code = symbol
+    @staticmethod
+    def code(symbol):
+        return f"MetalCentre_{symbol}"
 
 class Element(TmqmRDFABoxSubgraph):
     """
@@ -976,14 +948,5 @@ class Element(TmqmRDFABoxSubgraph):
 
     - :attr:`symbol`: Alias for :attr:`code`.
     """
-    name = "element"
+    category = "element"
     
-    def __init__(self, tmqmrdf, symbol):
-        """
-        - **Parameters**:
-            - `symbol`: the chemical symbol of the element.
-        """
-        super().__init__(tmqmrdf, "elements", symbol)
-
-        self.symbol = symbol
-        """Alias for :attr:`code`"""
