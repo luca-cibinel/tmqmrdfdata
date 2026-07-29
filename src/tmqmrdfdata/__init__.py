@@ -32,6 +32,7 @@ SOFTWARE.
 
 from . import terminology
 from . import assertions
+from . import _pages
 
 from tqdm import tqdm
 
@@ -52,6 +53,10 @@ __all__ = [
     "assertions",
     "factory"
 ]
+
+# %% Lookup utils ====
+no = _pages._LookupEngine(None)
+"""The global :doc:`Online Lookup Engine </usage/lookup>`."""
 
 # %% Download utils ====
 def _download_zip(fetch_url, dir, new_dirname = None):
@@ -194,7 +199,11 @@ def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest", hdt_format 
 
     # Write link to github repository (for single file visualisation)
     with open(os.path.join(dir, dataset_root_dir, ".pages"), "w") as f:
-        f.write(f"https://github.com/luca-cibinel/tmQM-RDF-archive/%s/{vname}/")
+        f.write(str({
+                "base_link": f"https://github.com/luca-cibinel/tmQM-RDF-archive/blob/{vname}/",
+                "version": vname
+            })
+        )
 
     print("Download complete!")
 
@@ -245,6 +254,7 @@ class TmqmRDF(collections.UserDict):
 
     The class has the following attributes:
 
+    - :attr:`no` The local :doc:`Online Lookup Engine </usage/lookup>`.
     - :attr:`path` The path to the root of the tmQM-RDF directory.  
     - :attr:`index` A dictionary with keys 'centres', 'elements', 'ligands', and 'TMCs' whse values are the lists of the available entries for the corresponding assertions.  
     - :attr:`tbox` An instance of :class:`terminology.TmqmRDFTBoxSubgraph` representing the TBox.  
@@ -266,7 +276,10 @@ class TmqmRDF(collections.UserDict):
         super().__init__()
 
         with open(os.path.join(path, ".pages"), "r") as f:
-            self._pages = f.read().strip()
+            self._pages = eval(f.read())
+
+        self.no = _pages._LookupEngine(self._pages["version"])
+        """The local :doc:`Online Lookup Engine </usage/lookup>`"""
 
         self.path = path
         """The path to the root of the tmQM-RDF directory."""
