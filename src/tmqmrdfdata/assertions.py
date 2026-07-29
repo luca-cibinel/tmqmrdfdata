@@ -943,10 +943,6 @@ class Centre(TmqmRDFABoxSubgraph):
 class Element(TmqmRDFABoxSubgraph):
     """
     A class representing the subgraph of tmQM-RDF describing a given element.
-
-    The class has the following attributes, in addition to those it inherits:
-
-    - :attr:`symbol`: Alias for :attr:`code`.
     """
     category = "element"
     

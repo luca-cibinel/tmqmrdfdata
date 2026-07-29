@@ -30,6 +30,7 @@ The package may be installed using ``pip``:
    :caption: Contents:
 
    usage/getting_started
+   usage/lookup
 
 
 .. toctree::

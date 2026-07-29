@@ -12,9 +12,9 @@ to easily retrieve all the possible properties of these objects using a networkx
    :show-inheritance:
    :inherited-members:
    :special-members: __init__
-   :exclude-members: name
+   :exclude-members: category
 
-   .. autoattribute:: tmqmrdfdata.assertions.TmqmRDFABoxSubgraph.name
+   .. autoattribute:: tmqmrdfdata.assertions.TmqmRDFABoxSubgraph.category
       :no-value:
 
 .. autoclass:: tmqmrdfdata.assertions.TMC
