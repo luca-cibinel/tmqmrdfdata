@@ -82,11 +82,16 @@ DEFAULT_NAMESPACES["tmS"] = rdflib.Namespace("https://www.integreat.no/research/
 DEFAULT_NAMESPACES["xmls"] = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
 
 DEFAULT_PREFIXES = dict() #: The inverse of :data:`DEFAULT_NAMESPACES`
-
 _this = sys.modules[__name__]
 for pfx, ns in DEFAULT_NAMESPACES.items():
     setattr(_this, pfx, ns)
     DEFAULT_PREFIXES[ns] = pfx
+
+class RuntimeNamespace:
+
+    def __init__(self, content):
+        for symbol, uri in content.items():
+            self.__setattr__(symbol, uri)
 
 class TmqmRDFTBoxSubgraph:
     """
@@ -151,12 +156,20 @@ class TmqmRDFTBoxSubgraph:
 
         # Convert namespaces in namedtuples
         ntpl = {
+            nsname : RuntimeNamespace(
+                nsdata["members"]
+            )
+            for nsname, nsdata in ns.items() if len(nsdata["members"]) > 0
+        }
+        """
+        ntpl = {
             nsname: collections.namedtuple(
                 f"NS{nsname}",
                 list(nsdata["members"].keys())
             )(**nsdata["members"])
-            for nsname, nsdata in ns.items()
+            for nsname, nsdata in ns.items() if len(nsdata["members"]) > 0
         }
+        """
 
         for nsname, obj in ntpl.items():
             self.__setattr__(nsname, obj)

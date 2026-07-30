@@ -35,9 +35,7 @@ SOFTWARE.
 """
 
 from . import terminology
-from . import factory
 
-from rdflib import container
 from pathlib import Path
 
 import collections
@@ -341,10 +339,27 @@ class _BNCrawler:
         
         return self._BNTraversal(self, list(self.g.transitiveClosure(walk_via_bn, start)), path, filtered_bns, start.split("/")[-1].replace("-", "_"))
 
-class TmqmRDFABoxSubgraph(factory.AbstractTmqmRDFABoxSubgraph):
+class TmqmRDFABoxSubgraph:
     """
     A base class representing a subgraph of tmQM-RDF's ABox.
 
+    The retrieved knowledge graph can be accessed from the tmqmrdf object via the key ``(category, symbol)``.
+
+    This class provides the following attributes:
+
+    - :attr:`tmqmrdf`: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
+    - :attr:`symbol`: The user-friendly identifying symbol.
+    - :attr:`kgraph`: The knowledge graph represented by the instance of the class.
+    - :attr:`category`: The code-level name of the type of knowledge accessed by this class.
+
+    and the following methods:
+
+    - :meth:`code`: Defines how the user-friendly symbol identifying each instance is converted in a operational identifier.
+        The basic behaviour of this function is to convert a symbol into a file name, though it is not a technical requirement, as the specific 
+        logic behind the retrieval of an appropriate knowledge graph is entirely controlled by the subclass.
+    - :meth:`query`: Wrapper for ``self.kgraph.query()``. See `rdflib.Graph.query`_.
+
+    .. _rdflib.Graph.query: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/#rdflib.graph.Graph.query
     .. _rdflib.Graph: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/
     """
 
@@ -355,7 +370,9 @@ class TmqmRDFABoxSubgraph(factory.AbstractTmqmRDFABoxSubgraph):
         :param tmqmrdf: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
         :param symbol: The identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
         """
-        super().__init__(tmqmrdf, symbol)
+        self.tmqmrdf = tmqmrdf
+        self.symbol = symbol
+        
         self._rdf_file = Path(
             os.path.join(
                 tmqmrdf.path, "assertions", type(self).category + "s", f"{type(self).code(symbol)}.{tmqmrdf._backend}"
@@ -398,6 +415,15 @@ class TmqmRDFABoxSubgraph(factory.AbstractTmqmRDFABoxSubgraph):
     
     @staticmethod
     def code(symbol):
+        """
+        Defines how the user-friendly symbol identifying each instance is converted in a operational identifier.
+        The basic behaviour of this function is to convert a symbol into a file name, though it is not a technical requirement, as the specific 
+        logic behind the retrieval of an appropriate knowledge graph is entirely controlled by the subclass.
+
+        :param symbol: The user-friendly identifying symbol.
+
+        :return: The operational identifier of this knowledge graph.
+        """
         return symbol
 
 class TMC(TmqmRDFABoxSubgraph):
