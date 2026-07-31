@@ -34,12 +34,15 @@ from . import terminology
 from . import assertions
 from . import _pages
 
+from tqdm.contrib import concurrent
+from tqdm import contrib
 from tqdm import tqdm
 
-import multiprocessing
 import urllib.request
 import collections
 import rdflib_hdt
+import itertools
+import functools
 import tempfile
 import zipfile
 import rdflib
@@ -48,10 +51,10 @@ import os
 
 __all__ = [
     "download_tmQM_RDF_knowledge_graph",
+    "concurrent_map",
     "TmqmRDF",
     "terminology",
-    "assertions",
-    "factory"
+    "assertions"
 ]
 
 # %% Lookup utils ====
@@ -207,6 +210,8 @@ def download_tmQM_RDF_knowledge_graph(dir = ".", version = "latest", hdt_format 
 
     print("Download complete!")
 
+# %% Dataset utils ====
+
 class _TmqmRDF_HDTStore(rdflib_hdt.HDTStore):
     """
     An internal utility class that extends rdflib_hdt.HDTStore to include the default namespaces
@@ -231,8 +236,7 @@ class _TmqmRDF_HDTStore(rdflib_hdt.HDTStore):
         return self.__prefix.get(namespace, None)
 
     def namespaces(self):
-        for prefix, namespace in self.__namespace.items():
-            yield prefix, namespace
+        yield from self.__namespace.items()
 
 class TmqmRDF(collections.UserDict):
     """
@@ -281,7 +285,7 @@ class TmqmRDF(collections.UserDict):
         self.no = _pages._LookupEngine(self._pages["version"])
         """The local :doc:`Online Lookup Engine </usage/lookup>`"""
 
-        self.path = path
+        self.path = os.path.abspath(path)
         """The path to the root of the tmQM-RDF directory."""
 
         self._raw_index = {
@@ -300,13 +304,6 @@ class TmqmRDF(collections.UserDict):
         assert len(extension_type) == 1, f"Unable to identify dataset format. Found: {extension_type}; expected EXACTLY one of {list(rdflib.util.SUFFIX_FORMAT_MAP) + ["hdt"]}."
 
         self._backend = next(iter(extension_type))
-
-        self._categories = {
-            "tmcs": (assertions.TMC, True, "TMCs"),
-            "ligands": (assertions.Ligand, True, "ligands"),
-            "centres": (assertions.Centre, True, "centres"),
-            "elements": (assertions.Element, True, "elements")
-        }
 
         self.tbox = terminology.TmqmRDFTBoxSubgraph(self)
         """An instance of :class:`terminology.TmqmRDFTBoxSubgraph` representing the TBox."""
@@ -328,7 +325,7 @@ class TmqmRDF(collections.UserDict):
             kgraph = rdflib.Graph()
             kgraph.parse(rdf_file)
         elif extension == "hdt":
-            kgraph = rdflib.Graph(store = _TmqmRDF_HDTStore(str(rdf_file)))
+            kgraph = rdflib.Graph(store = _TmqmRDF_HDTStore(str(rdf_file), mapped = True))
         else:
             raise RuntimeError(f"Specified file format (.{extension}) not recognised!")
 
@@ -345,20 +342,22 @@ class TmqmRDF(collections.UserDict):
             - the instantiated class
         """
         return args[1](self, args[0])
+        #out.kgraph.close()
+        #out._kgraph = None
+        #return out
 
-    def fetch(self, tmcs = [], ligands = [], centres = [], elements = [], auto_fetch_tmc_components = False, n_cores = 1, **kwargs):
+    def fetch(self, tmcs = [], ligands = [], centres = [], elements = [], auto_fetch_tmc_components = False, progress = True):
         """
         Fetches the requested subgraphs from tmQM-RDF and makes them available for access via dictionary-like syntax.
         For each possible category, objects can be identified via their symbols or via a callable. If the latter is chosen,
-        the callable must accept one arguments (the parsed object) and return a boolean (whether the object is accepted or not).
+        the callable must accept one argument (the parsed object) and return a boolean (whether the object is accepted or not).
 
         :param tmcs: The list of CSD codes of the desired TMCs, or a callable as described above.
         :param ligands: The list of the tmQMg-L codes of the desired ligands, or a callable as described above.
         :param centres: The list of chemical symbols of the desired metal centres, or a callable as described above.
         :param elements: The list of chemical symbols of the desired elements, or a callable as described above.
         :param auto_fetch_tmc_components: Should the components of all requested TMCs (ligands, metal centres, elements) be automatically fetched? Default: False.
-        :param n_cores: Number of cores to use for import. Default: 1.
-        :param kwargs: For each custom category defined via self.register_category, the list of desired symbols, or a callable as described above.
+        :param progress: Show a progress bar. Default: True
         """
 
         objects_symbols = {
@@ -366,130 +365,53 @@ class TmqmRDF(collections.UserDict):
             "ligands": ligands,
             "centres": centres,
             "elements": elements
-        } | kwargs
+        }
 
-        categories = ["tmcs", "ligands", "centres", "elements"] + list(kwargs.keys())
+        categories = [cat for cat in objects_symbols if len(objects_symbols[cat]) > 0]
 
-        for catname in categories:
+        for catname in tqdm(categories, disable = not progress):
             # Process category class and symbols list
             objects = objects_symbols[catname]
-            Category = self._categories[catname][0]
+            Category = {"tmcs": assertions.TMC, "ligands": assertions.Ligand, "centres": assertions.Centre, "elements": assertions.Element}.get(catname)
 
             criterion = None
             if callable(objects):
-                if not self._categories[catname][1]:
-                    raise ValueError(f"Category {catname!r} cannot be indexed by a callable!")
-
                 criterion = objects
-                objects = self._categories[catname][2]
+                objects = self.index[catname if catname != "tmcs" else "TMCs"]
 
-                if type(objects) is str:
-                    objects = self.index[objects]
+            # Start parsing objects
+            preparsed_objects = [(obj, Category) for obj in objects if (Category.category, obj) not in self.data]
 
-            # Start parsing objects (possibly in parallel)
-            with multiprocessing.Pool(processes = n_cores) as pool:
-                parsed_objects = [(obj, Category) for obj in objects if (Category.category, obj) not in self.data]
+            if len(preparsed_objects) == 0:
+                continue
 
-                if len(parsed_objects) == 0:
+            parse = functools.partial(contrib.tmap, disable = not progress, leave = False)
+
+            for obj in parse(self._read, preparsed_objects):
+                if criterion is not None and not criterion(obj):
                     continue
 
-                if n_cores > 1:
-                    parse = pool.imap_unordered
-                else:
-                    parse = map
+                super().__setitem__((Category.category, obj.symbol), obj)
+                
+                # If needed, run auto_fetch_tmc_components routine
+                if auto_fetch_tmc_components and Category.category == "TMC":
+                    local_ligands = [
+                        lig_info["symbol"].split("_")[-1] for lig_info in obj._raw_ligs.values()
+                        if lig_info["symbol"].split("_")[-1] not in ligands
+                    ]
+                    ligands += list(set(local_ligands))
 
-                for obj in parse(self._read, parsed_objects):
-                    if criterion is not None and not criterion(obj):
-                        continue
+                    local_centre = [
+                        mc_info["symbol"].split("_")[-1] for mc_info in obj._raw_mc.values()
+                        if mc_info["symbol"].split("_")[-1] not in centres
+                    ]
+                    centres += local_centre
 
-                    super().__setitem__((Category.category, obj.symbol), obj)
-                    
-                    # If needed, run auto_fetch_tmc_components routine
-                    if auto_fetch_tmc_components and Category.category == "TMC":
-                        local_ligands = [
-                            lig_info["symbol"].split("_")[-1] for lig_info in obj._raw_ligs.values()
-                            if lig_info["symbol"].split("_")[-1] not in ligands
-                        ]
-                        ligands += list(set(local_ligands))
-
-                        local_centre = [
-                            mc_info["symbol"].split("_")[-1] for mc_info in obj._raw_mc.values()
-                            if mc_info["symbol"].split("_")[-1] not in centres
-                        ]
-                        centres += local_centre
-
-                        local_elements = [
-                            atom_info[1].split("/")[-1] for atom_info in obj._raw_atoms
-                            if atom_info[1].split("/")[-1] not in elements
-                        ]
-                        elements += list(set(local_elements))
-
-    def register_category(self, category_class, argname = None, fetch_via_callable = False, default_symbols = None):
-        """
-        Register a subclass of :class:`factory.AbstractTmqmRDFABoxSubgraph` as a viable interface accessibe from :meth:`fetch`.
-
-        :param category_class: A subclass of :class:`factory.AbstractTmqmRDFABoxSubgraph`.
-        :param argname: A name for the argument of :meth:`fetch` specifying the symbols to be passed to the class constructor. If None, defaults to ``category_class + 's'``. Default: None.
-        :param fetch_via_callable: Whether to allow a callable to be passed to :meth:`fetch` in place of a list of symbols. If True, ``default_symbols`` must also be provided. Default: False.
-        :param default_symbols: A list of default symbols to be parsed in case in which a callable is passed to :meth:`fetch`. Can also be a string, one of ``TMCs``, ``ligands``, ``elements``, or ``centres``, in which case the default list is taken to be the full list of available symbols for that class. Must be provided if ``fetch_via_callable`` is True. Ignored if ``fetch_via_callable`` is False. Default: None.
-        """
-        if argname is None:
-            argname = category_class.category + "s"
-
-        if argname in self._categories:
-            raise ValueError(f"A category with argname {argname!r} is already registered!")
-
-        if fetch_via_callable and default_symbols is None:
-            raise ValueError("A default list of symbols must be provided to 'default_symbols' when 'fetch_via_callable' is True!")
-
-            try:
-                iter(default_symbols)
-
-                if type(default_symbols) is str:
-                    if default_symbols not in self.index:
-                        raise ValueError(f"If 'default_symbols' is a string, it must be one of {list(self.index.keys())}!")
-
-                    default_symbols = self.index[default_symbols]
-            except TypeError:
-                raise TypeError("'default_symbols' must be either a string or an iterable of symbols!")
-
-        self._categories[argname] = (category_class, fetch_via_callable, default_symbols)
-    
-    def unregister_category(self, argname):
-        """
-        Unregister a previously registered interface class.
-
-        :param argname: The argname of the class to unregister.
-        """
-        if argname in ["tmcs", "elements", "ligands", "centres"]:
-            raise ValueError("Cannot unregister a default category!")
-
-        del self._categories[argname]
-
-    def registered_categories(self, label_defaults = False):
-        """
-        Yields an iterator over descriptive tokens representing the registered categories. Such tokens are tuples of the form::
-
-            (argname, interface class, fetch_via_callable, name/len of default symbols list).
-
-        :param label_defaults: if True, a fifth element is added to each tuple, representing whether that category is a default category. Default: False
-        """
-        for argname, cat_data in self._categories.items():
-            if label_defaults:
-                yield (
-                    argname, 
-                    cat_data[0], 
-                    cat_data[1], 
-                    cat_data[2] if (type(cat_data[2]) is str or cat_data[2] is None) else len(cat_data[2]),
-                    argname in ["tmcs", "elements", "ligands", "centres"]
-                )
-            else:
-                yield (
-                    argname, 
-                    cat_data[0], 
-                    cat_data[1], 
-                    cat_data[2] if (type(cat_data[2]) is str or cat_data[2] is None) else len(cat_data[2])
-                )
+                    local_elements = [
+                        atom_info[1].split("/")[-1] for atom_info in obj._raw_atoms
+                        if atom_info[1].split("/")[-1] not in elements
+                    ]
+                    elements += list(set(local_elements))
 
     def tmc(self, csd_code, with_components = False):
         """
@@ -501,7 +423,7 @@ class TmqmRDF(collections.UserDict):
     
            return self["TMC", csd_code]
         """
-        self.fetch(tmcs = [csd_code], auto_fetch_tmc_components = with_components)
+        self.fetch(tmcs = [csd_code], auto_fetch_tmc_components = with_components, progress = False)
 
         return self["TMC", csd_code]
 
@@ -515,7 +437,7 @@ class TmqmRDF(collections.UserDict):
 
            return self["ligand", tmqmgl_code]
         """
-        self.fetch(ligands = [tmqmgl_code])
+        self.fetch(ligands = [tmqmgl_code], progress = False)
 
         return self["ligand", tmqmgl_code]
 
@@ -529,7 +451,7 @@ class TmqmRDF(collections.UserDict):
     
            return self["centre", symbol]
         """
-        self.fetch(centres = [symbol])
+        self.fetch(centres = [symbol], progress = False)
 
         return self["centre", symbol]
 
@@ -543,7 +465,7 @@ class TmqmRDF(collections.UserDict):
     
            return self["element", symbol]
         """
-        self.fetch(elements = [symbol])
+        self.fetch(elements = [symbol], progress = False)
 
         return self["element", symbol]
 
@@ -555,3 +477,97 @@ class TmqmRDF(collections.UserDict):
         """
 
         return sum([g.kgraph for g in self.values()], rdflib.Graph())
+
+    def clear(self):
+        """
+        Utility function that closes all open RDF/HDT documents and clears the internal dictionary.
+        """
+
+        for value in self.data.values():
+            value.kgraph.close()
+        
+        self.data = {}
+
+# %% Computing utils ====
+def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = 100, n_workers = 1, **kwargs):
+    """
+    Processes the entries of tmQM-RDF according to a specified function using `tqdm.contrib.concurrent.process_map`_.
+
+    This function initialises an empty instance of :class:`tmqmrdfdata.TmqmRDF` which is then passed along
+    to each worker to enable data access.
+
+    :param:`job` must be a function with two mandatory positional arguments (in order): 
+    
+    - a :class:`tmqmrdfdata.TmqmRDF` instance;
+    - target data (see below);
+
+    and one mandatory keyword argument:
+
+    - *context*: context data (see below);
+
+    Additional keyword arguments are allowed.
+
+    The data passed to the :param:`job` function can be divided in two categories:
+
+    - :param:`target`: the main focus of the job. This is a stream of data points that can be processed independently
+        of each other. The stream will be partitioned in batches of size :param:`chuncksize` and then dispatched to
+        the workers.
+    - :param:`context`: context data that can be useful for the task at hand. This data stream is provided *identically*
+        in its entirety to each worker.
+
+    Both target and context data can be provided either as a list of objects or as a string indicating one of the tmQM-RDF
+    categories: "TMCs", "ligands", "centres", or "elements", in which case the entirety of the available entry symbols will be loaded.
+    For :param:`context`, multiple categories can be specified at once by providing a single string with comma separated category names (whitespaces are ignored).
+    If data is specified as category names, the following conversion rules will be applied at runtime: target data will be transformed into a list
+    of symbols (strings); context data will be transformed into a dictionary where category names are the keys and the values are lists of symbols (strings).
+    Examples of usage are the following:
+
+    .. code-block:: python
+        # Target data: subset of TMCs (divided among workers), no context
+        tmcs = ["XXYYZZ", "AABBCC", ...]
+        concurrent_transform(..., target = tmcs, ...)
+
+        # Target data: subset of TMCs (divided among workers), context: ligands (each worker receives the entire list of ligand symbols)
+        tmcs = ["XXYYZZ", "AABBCC", ...]
+        concurrent_transform(..., target = tmcs, context = "ligands", ...)
+
+        # Target data: TMCs (divided among workers), context: ligands (each worker receives the entire list of ligand symbols)
+        concurrent_transform(..., target = "TMCs", context = "ligands", ...)
+
+        # Target data: TMCs (divided among workers), context: ligands and elements (each worker receives the entire list of ligand and element symbols)
+        concurrent_transform(..., target = "TMCs", context = "ligands, elements", ...)
+
+    :param tmqmrdf_path: path to the root of tmQM-RDF.
+    :param job: callable, the function to apply to a batch of data. See details above.
+    :param target: a list of items to be batched and dispatched to the workers.
+    :param context: additional data, each worker receives a copy. Default: None.
+    :param batchsize: batch size. Default: 100.
+    :param n_workers: number of parallel workers. Default: 1.
+    :param kwargs: additional keyword argruments passet to :param:`job`.
+
+    :return: a list where each entry is the result of :param:`job` applied to a batch of :param:`target` data.
+
+    .. _tqdm.contrib.concurrent.process_map: https://tqdm.github.io/docs/contrib.concurrent/#process_map
+    """
+
+    tmqmrdf = TmqmRDF(tmqmrdf_path)
+
+    if type(target) == str:
+        target = tmqmrdf.index[target]
+    target = list(itertools.batched(target, batchsize))
+
+    if type(context) == str:
+        context = context.replace(" ", "").split(",")
+        context = {
+            category: tmqmrdf.index[category]
+            for category in context
+        }
+
+    out = concurrent.process_map(
+        functools.partial(job, tmqmrdf, context = context, **kwargs),
+        target,
+        max_workers = n_workers,
+        chunksize = 1
+    )
+
+    return out
