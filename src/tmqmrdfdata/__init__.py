@@ -310,6 +310,69 @@ class TmqmRDF(collections.UserDict):
         self.t = self.tbox
         """Alias for :attr:`tbox`."""
     
+    def keys(self, category = None):
+        """
+        Returns the keys of the internal dictionary representation.
+        By default, the entire set of (category, symbol) pairs is returned.
+        If a category is specified, only the symbols of that category are returned.
+
+        :param category: None, or one of "TMC"/"TMCs", "ligand"/"ligands", "centre"/centres", or "element"/"elements"
+            Default: None.
+        
+        :return: a KeysView or a list (if :param:`category` is specifed).
+        """
+        if category is None:
+            return super().keys()
+        
+        category = category.removesuffix("s")
+
+        if category not in ["TMC", "ligand", "centre", "element"]:
+            raise KeyError(f"The provided category ({category}) is invalid!")
+
+        return [symbol for cat, symbol in self.data if cat == category]
+
+    def values(self, category = None):
+        """
+        Returns the values of the internal dictionary representation.
+        By default, the entire set of :class:`tmqmrdfdata.assertions.TmqmRDFABoxSubgraph` objects is returned.
+        If a category is specified, only the objects of that category are returned.
+
+        :param category: None, or one of "TMC"/"TMCs", "ligand"/"ligands", "centre"/centres", or "element"/"elements"
+            Default: None.
+        
+        :return: a ValuesView or a list (if :param:`category` is specifed).
+        """
+        if category is None:
+            return super().values()
+        
+        category = category.removesuffix("s")
+
+        if category not in ["TMC", "ligand", "centre", "element"]:
+            raise KeyError(f"The provided category ({category}) is invalid!")
+        
+        return [obj for obj in self.data.values() if obj.category == category]
+
+    def items(self, category = None):
+        """
+        Returns the values of the internal dictionary representation.
+        By default, the entire set of ( (category, symbol), object ) pairs is returned.
+        If a category is specified, only the pairs (symbol, object) of that category are returned.
+
+        :param category: None, or one of "TMC"/"TMCs", "ligand"/"ligands", "centre"/centres", or "element"/"elements"
+            Default: None.
+        
+        :return: an ItemsView or a list (if :param:`category` is specifed).
+        """
+        if category is None:
+            return super().items()
+        
+        category = category.removesuffix("s")
+
+        if category not in ["TMC", "ligand", "centre", "element"]:
+            raise KeyError(f"The provided category ({category}) is invalid!")
+
+        return [(key[1], obj) for key, obj in self.data.items() if key[0] == category]
+
     def _read_kgraph(self, rdf_file):
         """
         Reads a knowledge graph in the form of an `rdflib.Graph`_ object using the appropriate backend
