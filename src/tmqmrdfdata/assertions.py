@@ -38,7 +38,6 @@ from . import terminology
 
 from pathlib import Path
 
-import collections
 import tempfile
 import graphviz
 import rdflib
@@ -170,6 +169,47 @@ _PubChemCPKColors = {
     'Og': 'f78bb2'
 }
 
+class _Assertion:
+    """
+    Together with _AssertionFactory, forms a pickle-safe equivalent of `collections.namedtuple`_.
+
+    _collections.namedtuple: https://docs.python.org/3/library/collections.html#collections.namedtuple
+    """
+    def __init__(self, argnames, args):
+        assert len(argnames) == len(args), f"{argnames} - {args}"
+        self._argnames = argnames
+        for n, a in zip(argnames, args):
+            self.__setattr__(n, a)
+    
+    def __repr__(self):
+        return f"_Assertion( {", ".join([arg + ": " + repr(getattr(self, arg)) for arg in self._argnames ])} )"
+
+    def __str__(self):
+        return f"_Assertion(\n\t{",\n\t".join([arg + "= " + str(getattr(self, arg)) for arg in self._argnames ])}\n\t)"
+
+class _AssertionFactory:
+    """
+    A pickle-safe equivalent of `collections.namedtuple`_.
+
+    _collections.namedtuple: https://docs.python.org/3/library/collections.html#collections.namedtuple
+    """
+    _EMPTY = object()
+
+    def __init__(self, argnames):
+        self._argnames = argnames
+
+    def __call__(self, *args, **kwargs):
+        assignments = [kwargs.get(arg, self._EMPTY) for arg in self._argnames]
+        assert len(args) == sum(x == self._EMPTY for x in assignments)
+        
+        ix = 0
+        for pos, assignment in enumerate(assignments):
+            if assignment == self._EMPTY:
+                assignments[pos] = args[ix]
+                ix += 1
+
+        return _Assertion(self._argnames, assignments)
+
 class _BNCrawler:
     """
     A utility class that performs a DFS traversal only along edges whose start and/or end is a blank node.
@@ -187,20 +227,18 @@ class _BNCrawler:
         matched the given filters) of the traversal into (nested) named tuples
         """
 
-        def __init__(self, crawler, closure, path, filtered_bns, name):
+        def __init__(self, crawler, closure, path, filtered_bns):
             """
             - Parameters:
                 - crawler: the BNCrawler
                 - closure: the nodes found by the DFS traversal
                 - path: a dictionary of the form {node: [nodes reached from node]}
                 - filtered_bns: the blank nodes that mathced the given filter
-                - a name for the collapsed branches
             """
             self.crawler = crawler
             self.closure = closure
             self.path = path
             self.filtered_bns = filtered_bns
-            self.name = name
 
         def contract(self, defaults, alt, **attribute_values):
             """
@@ -231,11 +269,9 @@ class _BNCrawler:
                     b_alt = contractions[b_type] if stored_ref == alt else b
                     b_main = contractions[b_type] if stored_ref != alt else b
 
-                    _Entry = b.__class__
-                    args = [*b_main]
-                    args[-1] = b_alt # last argument of _Entry is "alt"
+                    b_main.alt = b_alt
 
-                    contractions[b_type] = _Entry(*args)
+                    contractions[b_type] = b_main
                     continue
 
                 contractions[b_type] = b
@@ -264,15 +300,14 @@ class _BNCrawler:
 
             if len(list_like_objects) > 0:
                 loc_path = [(f"x{i}", x) for i, x in enumerate(list_like_objects)]
-                fields = list(zip(*loc_path))[0]
+                fields = next(zip(*loc_path))
 
                 def _Entry(*args):
                     return list(args)
             else:
                 loc_path = self.path[bn]
 
-                # pyrefly: ignore [bad-class-definition] # self.name is already sanitised before cosntruction
-                _Entry = collections.namedtuple(f"{self.name}_{counter}", fields)
+                _Entry = _AssertionFactory(fields)
             
             args = [None] * len(fields)
             field_to_idx = {f: i for i, f in enumerate(fields)}
@@ -282,12 +317,11 @@ class _BNCrawler:
                     
             return _Entry(*args)
 
-    def __init__(self, g, where_objof_isa_ = None, category_name = "", attributes = []):
+    def __init__(self, g, where_objof_isa_ = None, attributes = []):
         """
         - Parameters:
             - g: the RDF graph
             - where_objof_isa_: list of the form [predicate, [list of admissible objects]]
-            - category_name: the name (i.e., type) of entity that the DFS traversal is meant to summarise
             - attributes: a list of additional attributes that have to be retrieved alongside those specified by where_objof_isa_
         """
         self.g = g
@@ -307,11 +341,10 @@ class _BNCrawler:
             self.filter = [where_objof_isa_[0], type_is_admissible]
             self.fields = where_objof_isa_[1]
 
-        # Prepare Category namedtuple
+        # Prepare Category wrapper
         data_names = [re.sub(r"\W", "/", d).split("/")[-1] for d in self.fields]
-        loc_key = abs(hash("".join(self.fields + ["hash"])))
 
-        self.Category = collections.namedtuple(f"_{category_name}{loc_key}", data_names + attributes)
+        self.Category = _AssertionFactory(data_names + attributes)
     
     def dfs_traversal(self, start):
         """
@@ -321,11 +354,9 @@ class _BNCrawler:
         filtered_bns = []
 
         def walk_via_bn(node, h):
-            if node in filtered_bns:
-
-                if not self.filter[1](node, h):
-                    filtered_bns.remove(node)
-                    return []
+            if node in filtered_bns and not self.filter[1](node, h):
+                filtered_bns.remove(node)
+                return []
 
             for _, p,o in h.triples((node, None, None)):
                 if isinstance(node, rdflib.term.BNode) or isinstance(o, rdflib.term.BNode):
@@ -337,7 +368,7 @@ class _BNCrawler:
                     
                     yield o
         
-        return self._BNTraversal(self, list(self.g.transitiveClosure(walk_via_bn, start)), path, filtered_bns, start.split("/")[-1].replace("-", "_"))
+        return self._BNTraversal(self, list(self.g.transitiveClosure(walk_via_bn, start)), path, filtered_bns)
 
 class TmqmRDFABoxSubgraph:
     """
@@ -408,8 +439,7 @@ class TmqmRDFABoxSubgraph:
         
         return _BNCrawler(
                 self.kgraph, 
-                where_objof_isa_ = [ms_hasProperty, data], 
-                category_name = category_name, 
+                where_objof_isa_ = [ms_hasProperty, data],
                 attributes = attributes
             )
     
@@ -455,29 +485,30 @@ class TMC(TmqmRDFABoxSubgraph):
         :param data: Either None, an `rdflib.term.URIRef`_, or a list of such objects. If different from None, the given URIs indicate 
             which properties should be retrieved alongside with the list of atoms. URIs must belong to the ``tmAp`` prefix. Default: None.
         :param alt: One of "tmQM" or "tmQMg". In case a requested property is specified in both of these datasets, the one coming from the "alt" dataset will be absorbed into an ``alt`` attribute of the 
-               `collections.namedtuple`_ representing the property.
+               object representing the property data.
         
 
-        :returns: A dictionary where keys are `rdflib.term.URIRef`_ representing atoms and values are `collections.namedtuple`_ objects with the following attributes:
-                
-                  - `symbol`: The `rdflib.term.URIRef`_ of the chemical symbol of the atom;
-                  - if properties are requested (via the ``data`` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is a `collections.namedtuple`_ mirroring the set of directed paths starting at the URI of the property object in the RDF graph.
+        :returns: A dictionary where keys are `rdflib.term.URIRef`_ representing atoms and values are objects with the following attributes:
+                  
+                  - `symbol`: The chemical symbol of the atom;
+                  - `usymbol`: The `rdflib.term.URIRef`_ of the chemical symbol of the atom;
+                  - if properties are requested (via the ``data`` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is an object mirroring the set of directed paths starting at the URI of the property object in the RDF graph.
                     As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes.
                     Instances of `rdfs:Container`_ are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the `tmQM-RDF documentation`_.
         
         .. _rdflib.term.URIRef: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef
-        .. _collections.namedtuple: https://docs.python.org/3/library/collections.html#collections.namedtuple
         .. _rdfs:Container: https://www.w3.org/TR/rdf-schema/#ch_containervocab
         .. _tmQM-RDF documentation: https://github.com/luca-cibinel/tmQM-RDF
 
         """
-        bn_crawler = self._get_property_crawler(data, "AtomInstance", ["symbol"])
+        bn_crawler = self._get_property_crawler(data, "AtomInstance", ["symbol", "usymbol"])
 
         atoms = {
             atom: bn_crawler.dfs_traversal(atom).contract(
                     defaults = ["optimisation", "singlepoint"],
                     alt = alt,
-                    symbol = el
+                    usymbol = el,
+                    symbol = el.split("/")[-1]
                 )
             for atom, el in self._raw_atoms
         }
@@ -491,16 +522,15 @@ class TMC(TmqmRDFABoxSubgraph):
         :param data: Either None, an `rdflib.term.URIRef`_, or a list of such objects. If different from None, the given URIs indicate 
             which properties should be retrieved alongside with the list of atom bonds. URIs must belong to the ``tmBp`` prefix. Default: None.
         :param alt: One of "tmQM" or "tmQMg". In case a requested property is specified in both of these datasets, the one coming from the "alt" dataset will be absorbed into an ``alt`` attribute of the 
-               `collections.namedtuple`_ representing the property.
+               object representing the property data.
         
 
-        :returns: A dictionary where keys are `rdflib.term.URIRef`_ representing bonds and values are `collections.namedtuple`_ objects with the following attributes:
+        :returns: A dictionary where keys are `rdflib.term.URIRef`_ representing bonds and values are objects with the following attributes:
                 
                   - `atoms`: The list of the two `rdflib.term.URIRef`_ representations of the atoms in the bond;
                   - if properties are requested (via the ``data`` parameter), the same mechanism descibed in the returned value of :meth:`atoms` applies.
 
         .. _rdflib.term.URIRef: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef
-        .. _collections.namedtuple: https://docs.python.org/3/library/collections.html#collections.namedtuple
         """
         bn_crawler = self._get_property_crawler(data, "AtomicBondInstance", ["atoms"])
 
@@ -519,13 +549,13 @@ class TMC(TmqmRDFABoxSubgraph):
         """
         Retrieve the list of ligand-metal centre bonds the TMC.
 
-        :return: A dictionary where keys are `rdflib.term.URIRef`_ representing ligand-level bonds and values are `collections.namedtuple`_ objects with the following attributes:
+        :return: A dictionary where keys are `rdflib.term.URIRef`_ representing ligand-level bonds and values are  objects with the following attributes:
                  
                  - `ligand`: the `rdflib.term.URIRef`_ of the ligand participating in the bond;
                  - `atoms`: the list of the `rdflib.term.URIRef`_ representations of the atoms in the ligand bond;
                  - `bonds`: the list of the `rdflib.term.URIRef` representations of the atom-metal centre bonds corresponding to the atoms in `atoms`.
         """
-        _LigandBondInstance = collections.namedtuple(f"_LigandBondInstance{abs(hash('hash'))}", ["ligand", "bonds", "atoms"])
+        _LigandBondInstance = _AssertionFactory(["ligand", "bonds", "atoms"])
 
         lbonds = {
             lbond: _LigandBondInstance(
@@ -540,13 +570,14 @@ class TMC(TmqmRDFABoxSubgraph):
         """
         Retrieve the list of ligands the TMC.
 
-        :return: A dictionary where keys are `rdflib.term.URIRef`_ representing ligands and values are `collections.namedtuple`_ objects with the following attributes:
+        :return: A dictionary where keys are `rdflib.term.URIRef`_ representing ligands and values are objects with the following attributes:
                  
-                 - `symbol`: the `rdflib.term.URIRef`_ of the tmQMg-L code of the ligand species;
+                 - `symbol`: the tmQMg-L code of the ligand species;
+                 - `usymbol`: the `rdflib.term.URIRef`_ of the tmQMg-L code of the ligand species;
                  - `atoms`: the list of the `rdflib.term.URIRef`_ representations of the atoms in the ligand.
 
         """
-        _LigandInstance = collections.namedtuple(f"_LigandInstance{abs(hash('hash'))}", ["symbol", "atoms"])
+        _LigandInstance = _AssertionFactory(["symbol", "usymbol", "atoms"])
 
         ligs = {
             lig: _LigandInstance(
@@ -566,11 +597,13 @@ class TMC(TmqmRDFABoxSubgraph):
         :return: A tuple/dictionary as described above where:
                  
                  - `metal_centre_uri`: the `rdflib.term.URIRef`_ of the metal centre;
-                 - `metal_centre_data`: a `collections.namedtuple`_ with the following attributes:
-                 - `symbol`: the `rdflib.term.URIRef`_ of the metal centre (as a ligand level object);
-                 - `atoms`: the (singleton) list of the `rdflib.term.URIRef`_ representation of the metal centre atom.
+                 - `metal_centre_data`: an object with the following attributes:
+
+                    - `symbol`: the chemical symbol of the metal centre;
+                    - `usymbol`: the `rdflib.term.URIRef`_ of the metal centre (as a ligand level object);
+                    - `atoms`: the (singleton) list of the `rdflib.term.URIRef`_ representation of the metal centre atom.
         """
-        _MetalCentreInstance = collections.namedtuple(f"_MetalCentreInstance{abs(hash('hash'))}", ["symbol", "atoms"])
+        _MetalCentreInstance = _AssertionFactory(["symbol", "usymbol", "atoms"])
         (mc, mc_data), = self._raw_mc.items()
 
         if as_tuple:
@@ -587,13 +620,13 @@ class TMC(TmqmRDFABoxSubgraph):
         Retrieve the complex-level representation of the TMC.
 
         :param data: either None, an `rdflib.term.URIRef`_, or a list of such. If different from None, the given URIs indicate which properties should be retrieved alongside with the TMC. URIs must belong to the `cmTp` prefix. Note: even if a property is marked in tmQM-RDF as a "meta data", it is treated as any other property by this function. Default: None.
-        :param alt: one of "tmQM" or "tmQMg". In case a requested property is specified in both of these datasets, the one coming from the `alt` dataset will be absorbed into an `alt` attribute of the `collections.namedtuple`_ representing the property.
+        :param alt: one of "tmQM" or "tmQMg". In case a requested property is specified in both of these datasets, the one coming from the `alt` dataset will be absorbed into an `alt` attribute of the object representing the property data.
         :param as_tuple: if True, returns the result as a tuple of the form ``(complex_uri, complex_data)`` instead of a dictionary of the form ``{complex_uri: complex_data}`` (added for compatibility with the output of the other functions).
 
         :return: A tuple/dictionary as described above where:
                  
                  - `complex_uri`: the `rdflib.term.URIRef`_ of the complex-level representation of the TMC;
-                 - `complex_data`: a `collections.namedtuple` with the following attributes:
+                 - `complex_data`: an object with the following attributes:
                     
                     - if properties are requested (via the ``data`` parameter), the same mechanism descibed in the returned value of :meth:`atoms` applies.
         """
@@ -628,16 +661,18 @@ class TMC(TmqmRDFABoxSubgraph):
 
         ligs = {
             lig: {
-                "symbol": symbol,
+                "usymbol": symbol,
+                "symbol": symbol.split("_")[-1],
                 "atoms": list(self.kgraph.objects(lig, terminology.lgL["hasAtom"], unique = True))
             } for lig, symbol in lig_symbols
         }
 
-        cnt_symbol = list(self.kgraph.subject_objects(terminology.lgC["isMetalCentre"]))[0]
+        cnt_symbol = next(iter(self.kgraph.subject_objects(terminology.lgC["isMetalCentre"])))
         
         centre = {
             cnt_symbol[0]: {
-                "symbol": cnt_symbol[1],
+                "usymbol": cnt_symbol[1],
+                "symbol": cnt_symbol[1].split("_")[-1],
                 "atoms": list(self.kgraph.objects(cnt_symbol[0], terminology.lgC["hasAtom"]))
             }
         }
@@ -938,9 +973,10 @@ class Ligand(TmqmRDFABoxSubgraph):
         :return: A tuple/dictionary as described above where:
                  
                  - `species_uri`: the `rdflib.term.URIRef`_ of the RDF representation of the species;
-                 - `species_data`: a `collections.namedtuple`_ with the following attributes:
+                 - `species_data`: an object with the following attributes:
                     
-                    - if properties are requested (via the `data` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is a `collections.namedtuple`_ mirroring the set of directed paths starting at the URI of the property object in the RDF graph. As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes. Instances of `rdfs:Container`_ are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the `tmQM-RDF documentation`_.
+                    - if properties are requested (via the `data` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is an object mirroring the set of directed paths starting at the URI of the property object in the RDF graph. As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes. Instances of `rdfs:Container`_ are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the `tmQM-RDF documentation`_.
+        
         """
         bn_crawler = self._get_property_crawler(data, "LigandSpecies")
 

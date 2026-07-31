@@ -87,11 +87,22 @@ for pfx, ns in DEFAULT_NAMESPACES.items():
     setattr(_this, pfx, ns)
     DEFAULT_PREFIXES[ns] = pfx
 
-class RuntimeNamespace:
+class _RuntimeNamespace:
 
-    def __init__(self, content):
+    def __init__(self, ns, content):
+        self._internal_ns_repr = ns
+
         for symbol, uri in content.items():
             self.__setattr__(symbol, uri)
+
+    def __getitem__(self, key):
+        return self._internal_ns_repr[key]
+
+    def __repr__(self):
+        return f"<src.tmqmrdfdata.terminology._RuntimeNamespace(ns = {self._internal_ns_repr})>"
+
+    def __str__(self):
+        return str(self._internal_ns_repr)
 
 class TmqmRDFTBoxSubgraph:
     """
@@ -107,12 +118,13 @@ class TmqmRDFTBoxSubgraph:
     - :attr:`kgraph`: The `rdflib.Graph`_ representation of the TBox.
     - :attr:`tmqmrdf`: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
     - For each namespaxe `<pfx>` defined in tmQM-RDF, an attribute `.<pfx>` is defined. The value of the attribute 
-      is a `collections.namedtuple`_ whose attributes are 
-      the suffixes of the URIs within the namespace (those attributes evaluate to the 
-      corresponding `rdflib.term.URIRef`_ objects) defined in the TBox.
+      is a pickle-safe runtime initiated objects whose attributes are 
+      the suffixes of the URIs within the namespace. Each attribute evaluates to the 
+      corresponding `rdflib.term.URIRef`_ objects defined in the TBox. The objects also implement the same
+      __getitem__ behaviour as `rdflib.Namespace`_. The namespace URI is accessible via ``str()``, which can then
+      be used as a key for :attr:`tmqmrdfdata.terminology.DEFAULT_PREFIXES`.
 
     .. _rdflib.Graph: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.graph/
-    .. _collections.namedtuple: https://docs.python.org/3/library/collections.html#collections.namedtuple
     .. _rdflib.term.URIRef: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef
 
     """
@@ -154,22 +166,14 @@ class TmqmRDFTBoxSubgraph:
             ns[nsname]["members"][suffix] = ns[nsname]["ns"][suffix]
             
 
-        # Convert namespaces in namedtuples
+        # Convert namespaces into objects
         ntpl = {
-            nsname : RuntimeNamespace(
+            nsname : _RuntimeNamespace(
+                nsdata["ns"],
                 nsdata["members"]
             )
             for nsname, nsdata in ns.items() if len(nsdata["members"]) > 0
         }
-        """
-        ntpl = {
-            nsname: collections.namedtuple(
-                f"NS{nsname}",
-                list(nsdata["members"].keys())
-            )(**nsdata["members"])
-            for nsname, nsdata in ns.items() if len(nsdata["members"]) > 0
-        }
-        """
 
         for nsname, obj in ntpl.items():
             self.__setattr__(nsname, obj)
