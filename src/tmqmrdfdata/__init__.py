@@ -45,6 +45,7 @@ import itertools
 import functools
 import tempfile
 import zipfile
+import psutil
 import rdflib
 import json
 import os
@@ -412,13 +413,11 @@ class TmqmRDF(collections.UserDict):
     def fetch(self, tmcs = [], ligands = [], centres = [], elements = [], auto_fetch_tmc_components = False, progress = True):
         """
         Fetches the requested subgraphs from tmQM-RDF and makes them available for access via dictionary-like syntax.
-        For each possible category, objects can be identified via their symbols or via a callable. If the latter is chosen,
-        the callable must accept one argument (the parsed object) and return a boolean (whether the object is accepted or not).
 
-        :param tmcs: The list of CSD codes of the desired TMCs, or a callable as described above.
-        :param ligands: The list of the tmQMg-L codes of the desired ligands, or a callable as described above.
-        :param centres: The list of chemical symbols of the desired metal centres, or a callable as described above.
-        :param elements: The list of chemical symbols of the desired elements, or a callable as described above.
+        :param tmcs: The list of CSD codes of the desired TMCs.
+        :param ligands: The list of the tmQMg-L codes of the desired ligands.
+        :param centres: The list of chemical symbols of the desired metal centres.
+        :param elements: The list of chemical symbols of the desired elements.
         :param auto_fetch_tmc_components: Should the components of all requested TMCs (ligands, metal centres, elements) be automatically fetched? Default: False.
         :param progress: Show a progress bar. Default: True
         """
@@ -430,17 +429,12 @@ class TmqmRDF(collections.UserDict):
             "elements": elements
         }
 
-        categories = [cat for cat in objects_symbols if len(objects_symbols[cat]) > 0]
-
+        categories = [cat for cat in objects_symbols if auto_fetch_tmc_components or len(objects_symbols[cat]) > 0]
+        
         for catname in tqdm(categories, disable = not progress):
             # Process category class and symbols list
             objects = objects_symbols[catname]
             Category = {"tmcs": assertions.TMC, "ligands": assertions.Ligand, "centres": assertions.Centre, "elements": assertions.Element}.get(catname)
-
-            criterion = None
-            if callable(objects):
-                criterion = objects
-                objects = self.index[catname if catname != "tmcs" else "TMCs"]
 
             # Start parsing objects
             preparsed_objects = [(obj, Category) for obj in objects if (Category.category, obj) not in self.data]
@@ -451,22 +445,19 @@ class TmqmRDF(collections.UserDict):
             parse = functools.partial(contrib.tmap, disable = not progress, leave = False)
 
             for obj in parse(self._read, preparsed_objects):
-                if criterion is not None and not criterion(obj):
-                    continue
-
                 super().__setitem__((Category.category, obj.symbol), obj)
                 
                 # If needed, run auto_fetch_tmc_components routine
                 if auto_fetch_tmc_components and Category.category == "TMC":
                     local_ligands = [
-                        lig_info["symbol"].split("_")[-1] for lig_info in obj._raw_ligs.values()
-                        if lig_info["symbol"].split("_")[-1] not in ligands
+                        lig_info["symbol"] for lig_info in obj._raw_ligs.values()
+                        if lig_info["symbol"] not in ligands
                     ]
                     ligands += list(set(local_ligands))
 
                     local_centre = [
-                        mc_info["symbol"].split("_")[-1] for mc_info in obj._raw_mc.values()
-                        if mc_info["symbol"].split("_")[-1] not in centres
+                        mc_info["symbol"] for mc_info in obj._raw_mc.values()
+                        if mc_info["symbol"] not in centres
                     ]
                     centres += local_centre
 
@@ -552,9 +543,12 @@ class TmqmRDF(collections.UserDict):
         self.data = {}
 
 # %% Computing utils ====
-def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = 100, n_workers = 1, **kwargs):
+def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = (500, 100), n_workers = 1, progress = True, **kwargs):
     """
     Processes the entries of tmQM-RDF according to a specified function using `tqdm.contrib.concurrent.process_map`_.
+    To avoid erratic RDF handling due to eccessive memory usage, the data is processed in batches of size M, each of which
+    is dispatched to a subprocess.
+    Each bach can be further divided into L sub-batches, to allow parallel computing by means of multiple children processes.
 
     This function initialises an empty instance of :class:`tmqmrdfdata.TmqmRDF` which is then passed along
     to each worker to enable data access.
@@ -573,8 +567,8 @@ def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = 100, n
     The data passed to the :param:`job` function can be divided in two categories:
 
     - :param:`target`: the main focus of the job. This is a stream of data points that can be processed independently
-        of each other. The stream will be partitioned in batches of size :param:`chuncksize` and then dispatched to
-        the workers.
+        of each other. The stream will be partitioned in batches of size :param:`batchsize` ``[0]``, and then possibly dispatched to
+        the workers in sub-batches of size :param:`batchsize` ``[1]``.
     - :param:`context`: context data that can be useful for the task at hand. This data stream is provided *identically*
         in its entirety to each worker.
 
@@ -604,20 +598,21 @@ def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = 100, n
     :param job: callable, the function to apply to a batch of data. See details above.
     :param target: a list of items to be batched and dispatched to the workers.
     :param context: additional data, each worker receives a copy. Default: None.
-    :param batchsize: batch size. Default: 100.
+    :param batchsize: tuple of batch sizes (M, N). Default: (500, 100).
     :param n_workers: number of parallel workers. Default: 1.
+    :param progress: show a progress bar. Default: True.
     :param kwargs: additional keyword argruments passet to :param:`job`.
 
     :return: a list where each entry is the result of :param:`job` applied to a batch of :param:`target` data.
 
     .. _tqdm.contrib.concurrent.process_map: https://tqdm.github.io/docs/contrib.concurrent/#process_map
     """
-
+    process = psutil.Process(os.getpid())
     tmqmrdf = TmqmRDF(tmqmrdf_path)
 
     if type(target) == str:
         target = tmqmrdf.index[target]
-    target = list(itertools.batched(target, batchsize))
+    target = list(itertools.batched(target, batchsize[0]))
 
     if type(context) == str:
         context = context.replace(" ", "").split(",")
@@ -626,11 +621,17 @@ def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = 100, n
             for category in context
         }
 
-    out = concurrent.process_map(
-        functools.partial(job, tmqmrdf, context = context, **kwargs),
-        target,
-        max_workers = n_workers,
-        chunksize = 1
-    )
+    out = []
+    loader = tqdm(target)
+    for batch in loader:
+        out += concurrent.process_map(
+            functools.partial(job, tmqmrdf, context = context, **kwargs),
+            list(itertools.batched(batch, batchsize[1])),
+            max_workers = n_workers,
+            chunksize = 1,
+            leave = False
+        )
+
+        loader.set_postfix_str(f"RSS = {process.memory_info().rss / 1024**2:.2f} MB")
 
     return out
