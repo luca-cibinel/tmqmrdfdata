@@ -12,3 +12,5 @@ Accessing the data
 .. autoclass:: tmqmrdfdata.TmqmRDF
    :members:
    :special-members: __init__
+
+.. autofunction:: tmqmrdfdata.concurrent_map

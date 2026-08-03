@@ -36,6 +36,16 @@ This will download the latest available version of tmQM-RDF into the directory `
 
 It is possible to download a specific version of tmQM-RDF by changing the ``version`` parameter. This parameter takes in input a string representing the *exact* version number to retrieve (without any leading prefix, e.g., to download the version v1.0.1, you must type ``version = "1.0.1"``).
 
+HDT Format
+^^^^^^^^^^
+
+By default, tmQM-RDF is stored in `turtle`_ format, which is human-readable, but not particularly efficient when it comes to extensive tasks. One alternative
+is to use the `HDT`_ format. Although not human-readable, it allows for increased efficiency both in terms of memory and time. An HDT-equivalent version of tmQM-RDF
+can be downloaded with the same code shown above, with the addition of the ``hdt_format = True`` argument.
+
+.. _turtle: https://www.w3.org/TR/turtle/
+.. _HDT: https://www.w3.org/TR/turtle/
+
 Interfacing with the data
 -------------------------
 Once the data has been downloaded, the main interface can be instantiated:
@@ -89,7 +99,12 @@ is equivalent to
 
 Property retrieval
 ^^^^^^^^^^^^^^^^^^
-Within tmQM-RDF, atoms, atomic bonds, ligand species, and whole complexes are endowed with properties. These can be accessed from the corresponding TMC/ligand species subgraph. For example, if you wish to retrieve the natural atomic charge of the atoms of KCEYPT you can use the following code:
+
+.. note:: This topic is treated in detail in :doc:`/usage/property_retrieval`.
+
+Within tmQM-RDF, atoms, atomic bonds, ligand species, and whole complexes are endowed with properties, which can be accessed from the corresponding knowledge graph. 
+
+For example, if you wish to retrieve the natural atomic charge of the atoms of KCEYPT you can use the following code:
 
 .. code-block:: python
 
@@ -113,7 +128,7 @@ Notice that the property had to be specified using ``tmAp["natural_atomic_charge
     
   which is the URI that tmQM-RDF uses to denote the natural atomic charge property of atoms.
 
-If you now want to inspect the result, you will have to go through a dictionary where the keys are the URIs of the atoms of KCEYPT whereas the values are `collections.namedtuple`_ objects mirroring the structure of the RDF graph describing the property. See the documentation of the :doc:`../api/assertions` for information on how this mirroring is constructed.
+If you now want to inspect the result, you will have to go through a dictionary where the keys are the URIs of the atoms of KCEYPT whereas the values are Python objects mirroring the structure of the RDF graph describing the property. See :doc:`/usage/property_retrieval` and the documentation of the :doc:`../api/assertions` for information on how this mirroring is constructed.
 For now, let's just inspect the first entry of this dictionary:
 
 .. code-block:: python

@@ -8,6 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path("..", "src")))
 
+autodoc_mock_imports = ["rdflib", "rdflib_hdt", "graphviz"]
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 

@@ -320,7 +320,7 @@ class TmqmRDF(collections.UserDict):
         :param category: None, or one of "TMC"/"TMCs", "ligand"/"ligands", "centre"/centres", or "element"/"elements"
             Default: None.
         
-        :return: a KeysView or a list (if :param:`category` is specifed).
+        :return: a KeysView or a list (if ``category`` is specifed).
         """
         if category is None:
             return super().keys()
@@ -341,7 +341,7 @@ class TmqmRDF(collections.UserDict):
         :param category: None, or one of "TMC"/"TMCs", "ligand"/"ligands", "centre"/centres", or "element"/"elements"
             Default: None.
         
-        :return: a ValuesView or a list (if :param:`category` is specifed).
+        :return: a ValuesView or a list (if ``category`` is specifed).
         """
         if category is None:
             return super().values()
@@ -362,7 +362,7 @@ class TmqmRDF(collections.UserDict):
         :param category: None, or one of "TMC"/"TMCs", "ligand"/"ligands", "centre"/centres", or "element"/"elements"
             Default: None.
         
-        :return: an ItemsView or a list (if :param:`category` is specifed).
+        :return: an ItemsView or a list (if ``category`` is specifed).
         """
         if category is None:
             return super().items()
@@ -553,7 +553,7 @@ def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = (500, 
     This function initialises an empty instance of :class:`tmqmrdfdata.TmqmRDF` which is then passed along
     to each worker to enable data access.
 
-    :param:`job` must be a function with two mandatory positional arguments (in order): 
+    ``job`` must be a function with two mandatory positional arguments (in order): 
     
     - a :class:`tmqmrdfdata.TmqmRDF` instance;
     - target data (see below);
@@ -564,22 +564,23 @@ def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = (500, 
 
     Additional keyword arguments are allowed.
 
-    The data passed to the :param:`job` function can be divided in two categories:
+    The data passed to the ``job`` function can be divided in two categories:
 
-    - :param:`target`: the main focus of the job. This is a stream of data points that can be processed independently
-        of each other. The stream will be partitioned in batches of size :param:`batchsize` ``[0]``, and then possibly dispatched to
-        the workers in sub-batches of size :param:`batchsize` ``[1]``.
-    - :param:`context`: context data that can be useful for the task at hand. This data stream is provided *identically*
+    - ``target``: the main focus of the job. This is a stream of data points that can be processed independently
+        of each other. The stream will be partitioned in batches of size ``batchsize[0]``, and then possibly dispatched to
+        the workers in sub-batches of size ``batchsize[1]``.
+    - ``context``: context data that can be useful for the task at hand. This data stream is provided *identically*
         in its entirety to each worker.
 
     Both target and context data can be provided either as a list of objects or as a string indicating one of the tmQM-RDF
     categories: "TMCs", "ligands", "centres", or "elements", in which case the entirety of the available entry symbols will be loaded.
-    For :param:`context`, multiple categories can be specified at once by providing a single string with comma separated category names (whitespaces are ignored).
+    For ``context``, multiple categories can be specified at once by providing a single string with comma separated category names (whitespaces are ignored).
     If data is specified as category names, the following conversion rules will be applied at runtime: target data will be transformed into a list
     of symbols (strings); context data will be transformed into a dictionary where category names are the keys and the values are lists of symbols (strings).
     Examples of usage are the following:
 
     .. code-block:: python
+
         # Target data: subset of TMCs (divided among workers), no context
         tmcs = ["XXYYZZ", "AABBCC", ...]
         concurrent_transform(..., target = tmcs, ...)
@@ -601,9 +602,9 @@ def concurrent_map(tmqmrdf_path, job, target, context = None, batchsize = (500, 
     :param batchsize: tuple of batch sizes (M, N). Default: (500, 100).
     :param n_workers: number of parallel workers. Default: 1.
     :param progress: show a progress bar. Default: True.
-    :param kwargs: additional keyword argruments passet to :param:`job`.
+    :param kwargs: additional keyword argruments passet to ``job``.
 
-    :return: a list where each entry is the result of :param:`job` applied to a batch of :param:`target` data.
+    :return: a list where each entry is the result of ``job`` applied to a batch of ``target`` data.
 
     .. _tqdm.contrib.concurrent.process_map: https://tqdm.github.io/docs/contrib.concurrent/#process_map
     """

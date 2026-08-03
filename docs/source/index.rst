@@ -31,7 +31,8 @@ The package may be installed using ``pip``:
 
    usage/getting_started
    usage/lookup
-
+   usage/property_retrieval.rst
+   examples/fetch_zirconium_hepta5
 
 .. toctree::
    :maxdepth: 2
@@ -39,6 +40,5 @@ The package may be installed using ``pip``:
 
    api/download
    api/assertions
-   api/factory
    api/terminology
 

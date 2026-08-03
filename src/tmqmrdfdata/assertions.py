@@ -490,8 +490,8 @@ class TMC(TmqmRDFABoxSubgraph):
 
         :returns: A dictionary where keys are `rdflib.term.URIRef`_ representing atoms and values are objects with the following attributes:
                   
-                  - `symbol`: The chemical symbol of the atom;
-                  - `usymbol`: The `rdflib.term.URIRef`_ of the chemical symbol of the atom;
+                  - ``symbol``: The chemical symbol of the atom;
+                  - ``usymbol``: The `rdflib.term.URIRef`_ of the chemical symbol of the atom;
                   - if properties are requested (via the ``data`` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is an object mirroring the set of directed paths starting at the URI of the property object in the RDF graph.
                     As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes.
                     Instances of `rdfs:Container`_ are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the `tmQM-RDF documentation`_.
@@ -527,7 +527,7 @@ class TMC(TmqmRDFABoxSubgraph):
 
         :returns: A dictionary where keys are `rdflib.term.URIRef`_ representing bonds and values are objects with the following attributes:
                 
-                  - `atoms`: The list of the two `rdflib.term.URIRef`_ representations of the atoms in the bond;
+                  - ``atoms``: The list of the two `rdflib.term.URIRef`_ representations of the atoms in the bond;
                   - if properties are requested (via the ``data`` parameter), the same mechanism descibed in the returned value of :meth:`atoms` applies.
 
         .. _rdflib.term.URIRef: https://rdflib.readthedocs.io/en/stable/apidocs/rdflib.term/#rdflib.term.URIRef
@@ -551,9 +551,9 @@ class TMC(TmqmRDFABoxSubgraph):
 
         :return: A dictionary where keys are `rdflib.term.URIRef`_ representing ligand-level bonds and values are  objects with the following attributes:
                  
-                 - `ligand`: the `rdflib.term.URIRef`_ of the ligand participating in the bond;
-                 - `atoms`: the list of the `rdflib.term.URIRef`_ representations of the atoms in the ligand bond;
-                 - `bonds`: the list of the `rdflib.term.URIRef` representations of the atom-metal centre bonds corresponding to the atoms in `atoms`.
+                 - ``ligand``: the `rdflib.term.URIRef`_ of the ligand participating in the bond;
+                 - ``atoms``: the list of the `rdflib.term.URIRef`_ representations of the atoms in the ligand bond;
+                 - ``bonds``: the list of the `rdflib.term.URIRef` representations of the atom-metal centre bonds corresponding to the atoms in `atoms`.
         """
         _LigandBondInstance = _AssertionFactory(["ligand", "bonds", "atoms"])
 
@@ -572,9 +572,9 @@ class TMC(TmqmRDFABoxSubgraph):
 
         :return: A dictionary where keys are `rdflib.term.URIRef`_ representing ligands and values are objects with the following attributes:
                  
-                 - `symbol`: the tmQMg-L code of the ligand species;
-                 - `usymbol`: the `rdflib.term.URIRef`_ of the tmQMg-L code of the ligand species;
-                 - `atoms`: the list of the `rdflib.term.URIRef`_ representations of the atoms in the ligand.
+                 - ``symbol``: the tmQMg-L code of the ligand species;
+                 - ``usymbol``: the `rdflib.term.URIRef`_ of the tmQMg-L code of the ligand species;
+                 - ``atoms``: the list of the `rdflib.term.URIRef`_ representations of the atoms in the ligand.
 
         """
         _LigandInstance = _AssertionFactory(["symbol", "usymbol", "atoms"])
@@ -596,12 +596,12 @@ class TMC(TmqmRDFABoxSubgraph):
 
         :return: A tuple/dictionary as described above where:
                  
-                 - `metal_centre_uri`: the `rdflib.term.URIRef`_ of the metal centre;
-                 - `metal_centre_data`: an object with the following attributes:
+                 - ``metal_centre_uri``: the `rdflib.term.URIRef`_ of the metal centre;
+                 - ``metal_centre_data``: an object with the following attributes:
 
-                    - `symbol`: the chemical symbol of the metal centre;
-                    - `usymbol`: the `rdflib.term.URIRef`_ of the metal centre (as a ligand level object);
-                    - `atoms`: the (singleton) list of the `rdflib.term.URIRef`_ representation of the metal centre atom.
+                    - ``symbol``: the chemical symbol of the metal centre;
+                    - ``usymbol``: the `rdflib.term.URIRef`_ of the metal centre (as a ligand level object);
+                    - ``atoms``: the (singleton) list of the `rdflib.term.URIRef`_ representation of the metal centre atom.
         """
         _MetalCentreInstance = _AssertionFactory(["symbol", "usymbol", "atoms"])
         (mc, mc_data), = self._raw_mc.items()
@@ -625,16 +625,24 @@ class TMC(TmqmRDFABoxSubgraph):
 
         :return: A tuple/dictionary as described above where:
                  
-                 - `complex_uri`: the `rdflib.term.URIRef`_ of the complex-level representation of the TMC;
-                 - `complex_data`: an object with the following attributes:
+                 - ``complex_uri``: the `rdflib.term.URIRef`_ of the complex-level representation of the TMC;
+                 - ``complex_data``: an object with the following attributes:
                     
+                    - ``symbol``: the CSD code of the TMC;
+                    - ``usymbol``: the `rdflib.term.URIRef`_ of the TMC (as a complex level object). Identical to ``complex_uri``, added for compatibility with the rest of the methods;
+                    - ``ligands`` : the list of the composing ligand instances;
+                    - ``centre``: the URI of the metal centre (as a ligand level object)
                     - if properties are requested (via the ``data`` parameter), the same mechanism descibed in the returned value of :meth:`atoms` applies.
         """
-        bn_crawler = self._get_property_crawler(data, "TransitionMetalComplexInstance")
+        bn_crawler = self._get_property_crawler(data, "TransitionMetalComplexInstance", ["symbol", "usymbol", "ligands", "centre"])
 
         tmcdata = bn_crawler.dfs_traversal(self._raw_tmc).contract(
                         defaults = ["optimisation", "singlepoint"],
-                        alt = alt
+                        alt = alt,
+                        symbol = self.symbol,
+                        usymbol = self._raw_tmc,
+                        ligands = list(self._raw_ligs.keys()),
+                        centre = next(iter(self._raw_mc))
                     )
 
         if as_tuple:
