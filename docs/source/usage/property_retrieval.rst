@@ -20,10 +20,10 @@ The following methods are available in the :doc:`../api/assertions` to retrieve 
 - :meth:`tmqmrdfdata.assertions.TMC.atoms` (provides: *symbol* and *properties*) |dagger|,
 - :meth:`tmqmrdfdata.assertions.TMC.bonds` (provides: *decomposition* and *properties*) |dagger|,
 - :meth:`tmqmrdfdata.assertions.TMC.centre` (provides: *symbol* and *decomposition*),
-- :meth:`tmqmrdfdata.assertions.TMC.complex` (provides: *symbol*, *decomposition*, and *properties*),
+- :meth:`tmqmrdfdata.assertions.TMC.tmc` (provides: *symbol*, *decomposition*, and *properties*),
 - :meth:`tmqmrdfdata.assertions.TMC.lbonds` (provides: *decomposition*) |dagger|,
 - :meth:`tmqmrdfdata.assertions.TMC.ligands` (provides: *symbol* and *decomposition*) |dagger|,
-- :meth:`tmqmrdfdata.assertions.Ligand.species` (provides: *symbol* and *properties*).
+- :meth:`tmqmrdfdata.assertions.Ligand.ligand` (provides: *symbol* and *properties*).
 
 The methods marked with |dagger| return a dictionary whose key-value pairs are the pair URI-information set described above.
 The remaining methods will return, by default, the same pair in the form of a tuple, but the return type can be changed to a dictionary by passing ``as_tuple = False``.

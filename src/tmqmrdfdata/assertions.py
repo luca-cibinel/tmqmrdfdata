@@ -545,9 +545,12 @@ class TMC(TmqmRDFABoxSubgraph):
 
         return bonds
 
-    def lbonds(self):
+    def lbonds(self, data = None, alt = None):
         """
         Retrieve the list of ligand-metal centre bonds the TMC.
+        
+        :param data: ignored, added for API consistency. Default: None.
+        :param alt: ignored, added for API consistency. Default: None.
 
         :return: A dictionary where keys are `rdflib.term.URIRef`_ representing ligand-level bonds and values are  objects with the following attributes:
                  
@@ -566,9 +569,12 @@ class TMC(TmqmRDFABoxSubgraph):
 
         return lbonds
 
-    def ligands(self):
+    def ligands(self, data = None, alt = None):
         """
         Retrieve the list of ligands the TMC.
+
+        :param data: ignored, added for API consistency. Default: None.
+        :param alt: ignored, added for API consistency. Default: None.
 
         :return: A dictionary where keys are `rdflib.term.URIRef`_ representing ligands and values are objects with the following attributes:
                  
@@ -588,10 +594,12 @@ class TMC(TmqmRDFABoxSubgraph):
 
         return ligs
 
-    def centre(self, as_tuple = True):
+    def centre(self, data = None, alt = None, as_tuple = True):
         """
         Retrieve the metal centre of the TMC.
 
+        :param data: ignored, added for API consistency. Default: None.
+        :param alt: ignored, added for API consistency. Default: None.
         :param as_tuple: if True, returns the result as a tuple of the form ``(metal_centre_uri, metal_centre_data)`` instead of a dictionary of the form ``{metal_centre_uri: metal_centre_data}``. Added for API consistency. Default: True.
 
         :return: A tuple/dictionary as described above where:
@@ -615,7 +623,7 @@ class TMC(TmqmRDFABoxSubgraph):
                 )
             }
     
-    def complex(self, data = None, alt = "tmQM", as_tuple = True):
+    def tmc(self, data = None, alt = "tmQM", as_tuple = True):
         """
         Retrieve the complex-level representation of the TMC.
 
@@ -970,7 +978,7 @@ class Ligand(TmqmRDFABoxSubgraph):
 
         self._raw_ligand = next(self.kgraph.subjects(terminology.rdf["type"], terminology.lgLr["LigandClass"]))
 
-    def species(self, data = None, alt = None, as_tuple = True):
+    def ligand(self, data = None, alt = None, as_tuple = True):
         """
         Retrieve the RDF representation of the ligand species.
 
@@ -1023,18 +1031,18 @@ class Centre(TmqmRDFABoxSubgraph):
         """
         Retrieves the RDF representation of the metal centre.
         As this function is added for API consistency among the subclasses of :class:`tmqmrdfdata.assertions.TmqmRDFABoxSubgraph`,
-        the URI of the centre class is always paired with an "empty assertion", i.e., an object with no attribtues nor methods.
+        the URI of the centre class is always paired with a "trivial assertion", i.e., an object with only one attribute, i.e., ``symbol``, which contains the chemical symbol of the centre.
 
         :param data: ignored, added for API consistency. Default: None.
         :param alt: ignored, added for API consistency. Default: None.
-        :param as_tuple: if True, returns the result as a tuple of the form ``(centre_class_uri, empty_assertion)`` instead of a dictionary of the form ``{centre_class_uri: empty_assertion}``. Added for API consistency. Default: True.
+        :param as_tuple: if True, returns the result as a tuple of the form ``(centre_class_uri, trivial_assertion)`` instead of a dictionary of the form ``{centre_class_uri: trivial_assertion}``. Added for API consistency. Default: True.
         
         :return: A tuple/dictionary as described above where:
                  
                  - ``centre_class_uri``: the `rdflib.term.URIRef`_ of the RDF representation of the metal centre class;
-                 - ``empty_assertion``: an object with no attributes.
+                 - ``trivial_assertion``: the trivial assertion described above.
         """
-        empty = _Assertion([], [])
+        empty = _Assertion(["symbol"], [self.symbol])
 
         if as_tuple:
             return self._raw_centre, empty
@@ -1060,19 +1068,19 @@ class Element(TmqmRDFABoxSubgraph):
         """
         Retrieves the RDF representation of the element.
         As this function is added for API consistency among the subclasses of :class:`tmqmrdfdata.assertions.TmqmRDFABoxSubgraph`,
-        the URI of the element is always paired with an "empty assertion", i.e., an object with no attribtues nor methods.
+        the URI of the element is always paired with a "trivial assertion", i.e., an object with only one attribute, i.e., ``symbol``, which contains the chemical symbol of the centre.
 
         :param data: ignored, added for API consistency. Default: None.
         :param alt: ignored, added for API consistency. Default: None.
-        :param as_tuple: if True, returns the result as a tuple of the form ``(element_uri, empty_assertion)`` instead of a dictionary of the form ``{element: empty_assertion}``. Added for API consistency. Default: True.
+        :param as_tuple: if True, returns the result as a tuple of the form ``(element_uri, trivial_assertion)`` instead of a dictionary of the form ``{element: trivial_assertion}``. Added for API consistency. Default: True.
         
                 
         :return: A tuple/dictionary as described above where:
                  
                  - ``element_uri``: the `rdflib.term.URIRef`_ of the RDF representation of the element;
-                 - ``empty_assertion``: an object with no attributes.
+                 - ``empty_assertion``: the trivial assertion described above.
         """
-        empty = _Assertion([], [])
+        empty = _Assertion(["symbol"], [self.symbol])
 
         if as_tuple:
             return self._raw_element, empty

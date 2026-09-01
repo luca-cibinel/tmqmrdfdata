@@ -73,7 +73,7 @@ As explained in :doc:`/usage/property_retrieval`, to check the hapticity order o
 
 .. code-block:: python
 
-    ligand_species.species(
+    ligand_species.ligand(
             data = tmqmrdf.tbox.lgLrp.n_haptic_bound
         ).n_haptic_bound.value >= 5
 
@@ -85,7 +85,7 @@ The actual filter can be best implemented outside of the :meth:`tmqmrdfdata.conc
 
 .. code-block:: python
 
-    charge = tmc.complex(
+    charge = tmc.tmc(
             data = tmqmrdf.tbox.cmTp.metal_node_natural_charge
         )[1].metal_node_natural_charge.value
 
@@ -105,7 +105,7 @@ Summarising the steps described above, the full function to be passed to :meth:`
             if tmc.centre()[1].symbol == "Zr":
                 hit_hepta5 = False
                 for ligand in tmc.ligands().values():
-                    _, ligand_species = tmqmrdf["ligand", ligand.symbol].species(
+                    _, ligand_species = tmqmrdf["ligand", ligand.symbol].ligand(
                         data = tmqmrdf.tbox.lgLrp.n_haptic_bound
                     )
 
@@ -241,7 +241,7 @@ Full Code
             if tmc.centre()[1].symbol == "Zr":
                 hit_hepta5 = False
                 for ligand in tmc.ligands().values():
-                    _, ligand_species = tmqmrdf["ligand", ligand.symbol].species(
+                    _, ligand_species = tmqmrdf["ligand", ligand.symbol].ligand(
                         data = tmqmrdf.tbox.lgLrp.n_haptic_bound
                     )
 
@@ -250,7 +250,7 @@ Full Code
                         break
                 
                 if hit_hepta5:
-                    charge = tmc.complex(
+                    charge = tmc.tmc(
                             data = tmqmrdf.tbox.cmTp.metal_node_natural_charge
                         )[1].metal_node_natural_charge.value
                     partial_result.append((symbol, charge))

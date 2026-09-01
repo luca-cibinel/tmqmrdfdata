@@ -24,7 +24,7 @@ def job_fetch_Zi_hepta5(tmqmrdf, tmcs, context = None):
         if tmc.centre()[1].symbol == "Zr":
             hit_hepta5 = False
             for ligand in tmc.ligands().values():
-                _, ligand_species = tmqmrdf["ligand", ligand.symbol].species(
+                _, ligand_species = tmqmrdf["ligand", ligand.symbol].ligand(
                     data = tmqmrdf.tbox.lgLrp.n_haptic_bound
                 )
 
@@ -33,7 +33,7 @@ def job_fetch_Zi_hepta5(tmqmrdf, tmcs, context = None):
                     break
             
             if hit_hepta5:
-                charge = tmc.complex(
+                charge = tmc.tmc(
                         data = tmqmrdf.tbox.cmTp.metal_node_natural_charge
                     )[1].metal_node_natural_charge.value
                 partial_result.append((symbol, charge))
