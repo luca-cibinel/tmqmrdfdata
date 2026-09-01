@@ -176,7 +176,7 @@ class _Assertion:
     _collections.namedtuple: https://docs.python.org/3/library/collections.html#collections.namedtuple
     """
     def __init__(self, argnames, args):
-        assert len(argnames) == len(args), f"{argnames} - {args}"
+        assert len(argnames) == len(args), f"Error in _Assertion construction: argnames: {argnames} - args: {args}"
         self._argnames = argnames
         for n, a in zip(argnames, args):
             self.__setattr__(n, a)
@@ -592,7 +592,7 @@ class TMC(TmqmRDFABoxSubgraph):
         """
         Retrieve the metal centre of the TMC.
 
-        :param as_tuple: if True, returns the result as a tuple of the form ``(metal_centre_uri, metal_centre_data)`` instead of a dictionary of the form ``{metal_centre_uri: metal_centre_data}`` (added for compatibility with the output of the other functions). Default: True.
+        :param as_tuple: if True, returns the result as a tuple of the form ``(metal_centre_uri, metal_centre_data)`` instead of a dictionary of the form ``{metal_centre_uri: metal_centre_data}``. Added for API consistency. Default: True.
 
         :return: A tuple/dictionary as described above where:
                  
@@ -621,7 +621,7 @@ class TMC(TmqmRDFABoxSubgraph):
 
         :param data: either None, an `rdflib.term.URIRef`_, or a list of such. If different from None, the given URIs indicate which properties should be retrieved alongside with the TMC. URIs must belong to the `cmTp` prefix. Note: even if a property is marked in tmQM-RDF as a "meta data", it is treated as any other property by this function. Default: None.
         :param alt: one of "tmQM" or "tmQMg". In case a requested property is specified in both of these datasets, the one coming from the `alt` dataset will be absorbed into an `alt` attribute of the object representing the property data.
-        :param as_tuple: if True, returns the result as a tuple of the form ``(complex_uri, complex_data)`` instead of a dictionary of the form ``{complex_uri: complex_data}`` (added for compatibility with the output of the other functions).
+        :param as_tuple: if True, returns the result as a tuple of the form ``(complex_uri, complex_data)`` instead of a dictionary of the form ``{complex_uri: complex_data}``. Added for API consistency. Default: True.
 
         :return: A tuple/dictionary as described above where:
                  
@@ -929,7 +929,7 @@ class TMC(TmqmRDFABoxSubgraph):
         
         :param format: the desired output format for the resulting graphviz object (pdf, png, svg, ...).
         :param filename: the name of the file (without the extension) to which the output should be saved (optional).
-        :param layout: the desired layout engine, one of '"dot" and "neato". Default: "neato".
+        :param layout: the desired layout engine, one of "dot" and "neato". Default: "neato".
         """
         src = self.as_graphviz(layout)
         src.format = format
@@ -945,7 +945,7 @@ class TMC(TmqmRDFABoxSubgraph):
         
         :param format: the desired output format for the resulting graphviz object (pdf, png, svg, ...).
         :param filename: the name of the file (without the extension) to which the output should be saved.
-        :param layout: the desired layout engine, one of '"dot" and "neato". Default: "neato".
+        :param layout: the desired layout engine, one of "dot" and "neato". Default: "neato".
         """
         src = self.as_graphviz(layout)
         src.format = format
@@ -976,14 +976,14 @@ class Ligand(TmqmRDFABoxSubgraph):
 
         :param data: either None, an `rdflib.term.URIRef`_, or a list of such. If different from None, the given URIs indicate which properties should be retrieved. URIs must belong to the `lgLrp` prefix. Default: None.
         :param alt: ignored. Added for compatibility with the other functions.
-        :param as_tuple: if True, returns the result as a tuple of the form ``(species_uri, species_data)`` instead of a dictionary of the form ``{species_uri: species_data}`` (added for compatibility with the output of the other functions). Default: True.
+        :param as_tuple: if True, returns the result as a tuple of the form ``(species_uri, species_data)`` instead of a dictionary of the form ``{species_uri: species_data}``. Added for API consistency. Default: True.
 
         :return: A tuple/dictionary as described above where:
                  
-                 - `species_uri`: the `rdflib.term.URIRef`_ of the RDF representation of the species;
-                 - `species_data`: an object with the following attributes:
+                 - ``species_uri``: the `rdflib.term.URIRef`_ of the RDF representation of the species;
+                 - ``species_data``: an object with the following attributes:
                     
-                    - if properties are requested (via the `data` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is an object mirroring the set of directed paths starting at the URI of the property object in the RDF graph. As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes. Instances of `rdfs:Container`_ are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the `tmQM-RDF documentation`_.
+                    - if properties are requested (via the ``data`` parameter), an attribute corresponding to the suffix of each requested property. The value of the attribure is an object mirroring the set of directed paths starting at the URI of the property object in the RDF graph. As a rule of thumb, predicates are turned into attributes of the tuple(s), objects are turned into Python objects if they are URIs/literals, and turned into a nested named tuple if they are blank nodes. Instances of `rdfs:Container`_ are an exception, as they are turned in lists where objects are converted again using the same mechanism above. Please refer to the `tmQM-RDF documentation`_.
         
         """
         bn_crawler = self._get_property_crawler(data, "LigandSpecies")
@@ -1006,13 +1006,76 @@ class Centre(TmqmRDFABoxSubgraph):
     """
     category = "centre"
     
+    def __init__(self, tmqmrdf, symbol):
+        """
+        :param tmqmrdf: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
+        :param symbol: The identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
+        """
+        super().__init__(tmqmrdf, symbol)
+
+        self._raw_centre = next(self.kgraph.subjects(terminology.rdf["type"], terminology.lgCr["MetalCentreClass"]))
+
     @staticmethod
     def code(symbol):
         return f"MetalCentre_{symbol}"
+
+    def centre(self, data = None, alt = None, as_tuple = True):
+        """
+        Retrieves the RDF representation of the metal centre.
+        As this function is added for API consistency among the subclasses of :class:`tmqmrdfdata.assertions.TmqmRDFABoxSubgraph`,
+        the URI of the centre class is always paired with an "empty assertion", i.e., an object with no attribtues nor methods.
+
+        :param data: ignored, added for API consistency. Default: None.
+        :param alt: ignored, added for API consistency. Default: None.
+        :param as_tuple: if True, returns the result as a tuple of the form ``(centre_class_uri, empty_assertion)`` instead of a dictionary of the form ``{centre_class_uri: empty_assertion}``. Added for API consistency. Default: True.
+        
+        :return: A tuple/dictionary as described above where:
+                 
+                 - ``centre_class_uri``: the `rdflib.term.URIRef`_ of the RDF representation of the metal centre class;
+                 - ``empty_assertion``: an object with no attributes.
+        """
+        empty = _Assertion([], [])
+
+        if as_tuple:
+            return self._raw_centre, empty
+
+        return {self._raw_centre: empty}
 
 class Element(TmqmRDFABoxSubgraph):
     """
     A class representing the subgraph of tmQM-RDF describing a given element.
     """
     category = "element"
+
+    def __init__(self, tmqmrdf, symbol):
+        """
+        :param tmqmrdf: The parent :class:`tmqmrdfdata.TmqmRDF` instance.
+        :param symbol: The identifying code (CSD, tmQMg-L, chemical symbol) of the object of interest.
+        """
+        super().__init__(tmqmrdf, symbol)
+
+        self._raw_element = next(self.kgraph.subjects(terminology.rdf["type"], terminology.tmAr["Element"]))
+
+    def element(self, data = None, alt = None, as_tuple = True):
+        """
+        Retrieves the RDF representation of the element.
+        As this function is added for API consistency among the subclasses of :class:`tmqmrdfdata.assertions.TmqmRDFABoxSubgraph`,
+        the URI of the element is always paired with an "empty assertion", i.e., an object with no attribtues nor methods.
+
+        :param data: ignored, added for API consistency. Default: None.
+        :param alt: ignored, added for API consistency. Default: None.
+        :param as_tuple: if True, returns the result as a tuple of the form ``(element_uri, empty_assertion)`` instead of a dictionary of the form ``{element: empty_assertion}``. Added for API consistency. Default: True.
+        
+                
+        :return: A tuple/dictionary as described above where:
+                 
+                 - ``element_uri``: the `rdflib.term.URIRef`_ of the RDF representation of the element;
+                 - ``empty_assertion``: an object with no attributes.
+        """
+        empty = _Assertion([], [])
+
+        if as_tuple:
+            return self._raw_element, empty
+
+        return {self._raw_element: empty}
     

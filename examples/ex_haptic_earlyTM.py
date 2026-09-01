@@ -101,4 +101,4 @@ if __name__ == "__main__":
     ax.text(1.5*0.8, 0.97, "Target", color = "red", transform = ax.get_xaxis_transform())
     ax.fill_betweenx([0, 1], 1.5 - sd, 1.5 + sd, color = (1., 0, 0, 0.2), transform = ax.get_xaxis_transform())
 
-    fig.savefig("./query_Zn_hepta5_metalcharge1.5.pdf", format = "pdf", bbox_inches = "tight")
+    fig.savefig("./query_Zn_hepta5_metalcharge1.5.png", format = "png", bbox_inches = "tight")
